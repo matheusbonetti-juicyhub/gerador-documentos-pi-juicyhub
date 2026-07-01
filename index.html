@@ -157,6 +157,35 @@
   .legenda-campos span{ display:inline-flex; align-items:center; gap:5px; }
   .legenda-dot{ width:10px; height:10px; border-radius:3px; display:inline-block; }
 
+  /* ===== Seleção de dimensões (chips/checkboxes) ===== */
+  .chip-options{
+    margin-top:8px;
+    display:flex; flex-wrap:wrap; gap:6px;
+    padding:10px;
+    background:#faf9f7;
+    border:1px solid var(--borda);
+    border-radius:6px;
+  }
+  .chip-options .chip-hint{
+    width:100%; font-size:11px; color:#888; margin-bottom:2px;
+  }
+  .chip-options label{
+    display:inline-flex; align-items:center; gap:5px;
+    background:white;
+    border:1px solid var(--borda);
+    border-radius:20px;
+    padding:4px 10px 4px 6px;
+    font-size:12px;
+    font-weight:600;
+    color:#444;
+    cursor:pointer;
+    user-select:none;
+  }
+  .chip-options input[type="checkbox"]{ width:auto; accent-color: var(--rosa); }
+  .chip-options label:has(input:checked){
+    background: #fdecf1; border-color: var(--rosa); color: var(--rosa-escuro);
+  }
+
   /* ===== Preview da carta ===== */
   .preview-wrapper{ position:sticky; top:20px; }
   #cartaPreview{
@@ -202,16 +231,24 @@
     margin: 0 64px;
   }
 
+  #printArea{ display:none; }
+
   @media print{
-    body *{ visibility:hidden; }
-    #cartaPreview, #cartaPreview *{ visibility:visible; }
-    #cartaPreview{
-      position:absolute; top:0; left:0; box-shadow:none; margin:0; width:100%;
+    body.modo-impressao > *:not(#printArea){ display:none !important; }
+    body.modo-impressao #printArea{
+      display:block !important;
+      position:static !important;
     }
+    body.modo-impressao #printArea #cartaPreview{
+      box-shadow:none !important; margin:0 !important; width:100% !important; min-height:auto !important;
+    }
+    @page{ margin: 12mm; }
   }
 </style>
 </head>
 <body>
+
+<div id="printArea"></div>
 
 <div class="app-header">
   <div>
@@ -268,9 +305,13 @@
       <div class="field"><label>Agência</label><input type="text" id="ac_agencia" placeholder="Baila Creative Co. Ltda."></div>
       <div class="field"><label>Departamento / A/C</label><input type="text" id="ac_departamento" value="Departamento de Mídia"></div>
 
-      <div class="field"><label>Formato</label><input type="text" id="ac_formato" placeholder="Banner Display"></div>
+      <div class="field"><label>Formato</label><input type="text" id="ac_formato" value="Banner Display"></div>
       <div class="field"><label>Posição</label><input type="text" id="ac_posicao" placeholder="Home e ROS"></div>
-      <div class="field"><label>Dimensões</label><input type="text" id="ac_dimensoes" placeholder="300x250, 728x90 e 170x180"></div>
+      <div class="field">
+        <label>Dimensões</label>
+        <input type="text" id="ac_dimensoes" placeholder="300x250, 728x90 e 170x180">
+        <div id="ac_dimensoes_opcoes" class="chip-options" style="display:none;"></div>
+      </div>
       <div class="field"><label>Modelo de compra</label><input type="text" id="ac_modelo" value="CPM"></div>
       <div class="row2">
         <div class="field"><label>Volume contratado (impressões)</label><input type="text" id="ac_volume" placeholder="27.085"></div>
@@ -387,7 +428,7 @@
     <div id="cartaPreview"></div>
     <div class="panel" style="margin-top:14px; text-align:center;">
       <button class="btn btn-primary" id="btnWord" onclick="baixarDocx()">⬇ Baixar como Word (.docx)</button>
-      <button class="btn btn-secondary" onclick="window.print()">🖨 Imprimir / Salvar PDF</button>
+      <button class="btn btn-secondary" onclick="imprimirDocumento()">🖨 Imprimir / Salvar PDF</button>
       <div id="downloadStatus" class="status-msg" style="display:none;"></div>
     </div>
   </div>
@@ -34005,6 +34046,26 @@ async function buildDocxBlob(model){
   return await Packer.toBlob(doc);
 }
 
+function imprimirDocumento(){
+  const preview = document.getElementById('cartaPreview');
+  const printArea = document.getElementById('printArea');
+  const originalParent = preview.parentNode;
+  const originalNext = preview.nextSibling;
+
+  printArea.appendChild(preview);
+  document.body.classList.add('modo-impressao');
+
+  const restaurar = ()=>{
+    document.body.classList.remove('modo-impressao');
+    if(originalNext) originalParent.insertBefore(preview, originalNext);
+    else originalParent.appendChild(preview);
+    window.removeEventListener('afterprint', restaurar);
+  };
+  window.addEventListener('afterprint', restaurar);
+  window.print();
+  setTimeout(restaurar, 3000); // fallback para navegadores sem 'afterprint'
+}
+
 async function baixarDocx(){
   if(!currentDocModel){ return; }
   const btn = document.getElementById('btnWord');
@@ -34087,11 +34148,13 @@ const LABEL_MAP = {
   'pedido de insercao':'pi', 'pi n':'pi', 'pi no':'pi', 'pi':'pi', 'no do pedido de insercao':'pi', 'numero do pi':'pi',
   'campanha':'campanha',
   'periodo de veiculacao':'periodo','periodo':'periodo','veiculacao':'periodo','data de veiculacao':'periodo',
+  'inicio da veiculacao':'dataInicioLabel','inicio':'dataInicioLabel','data inicio':'dataInicioLabel','data de inicio':'dataInicioLabel','veiculacao de':'dataInicioLabel',
+  'fim da veiculacao':'dataFimLabel','fim':'dataFimLabel','termino':'dataFimLabel','data fim':'dataFimLabel','data de termino':'dataFimLabel','data de fim':'dataFimLabel','ate':'dataFimLabel',
   'praca':'praca',
   'agencia':'agencia',
   'anunciante':'anunciante','razao social do anunciante':'anunciante','cliente':'anunciante','razao social':'anunciante',
   'formato':'formato',
-  'dimensoes':'dimensoes','dimensao':'dimensoes','tamanho':'dimensoes',
+  'dimensoes':'dimensoes','dimensao':'dimensoes','tamanho':'dimensoes','tamanhos':'dimensoes','sizes':'dimensoes','size':'dimensoes',
   'modelo de compra':'modeloCompra','modelo':'modeloCompra',
   'volume contratado':'volume','impressoes contratadas':'volume','volume':'volume','quantidade de impressoes':'volume','impressoes planejadas':'volume',
   'valor bruto':'valorBruto','valor total':'valorBruto','investimento':'valorBruto',
@@ -34101,10 +34164,26 @@ const LABEL_MAP = {
   'impressoes entregues':'entregue','entregues':'entregue','entrega':'entregue','total entregue':'entregue',
 };
 
+// CNPJ do próprio veículo (Juicyhub) — usado para diferenciar do CNPJ do anunciante na PI
+const CNPJ_JUICYHUB_DIGITS = '41954162000146';
+function normalizarCNPJ(s){ return (s||'').replace(/\D/g,''); }
+
+// Converte uma data em texto (dd/mm/aaaa, dd-mm-aaaa, dd.mm.aa, etc.) para ISO (aaaa-mm-dd)
+function dataBRParaISO(str){
+  if(!str) return null;
+  const m = str.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
+  if(!m) return null;
+  let [_, d, mo, y] = m;
+  d = d.padStart(2,'0'); mo = mo.padStart(2,'0');
+  if(y.length === 2) y = (parseInt(y,10) < 70 ? '20' : '19') + y;
+  return `${y}-${mo}-${d}`;
+}
+
 // Extrai um dicionário de campos a partir do texto bruto do PDF (heurístico — sempre revisar)
 function extrairCamposDeTexto(texto){
   const dict = {};
-  const linhas = texto.split('\n').map(l=>l.trim()).filter(Boolean);
+  const linhasBrutas = texto.split('\n');
+  const linhas = linhasBrutas.map(l=>l.trim()).filter(Boolean);
 
   linhas.forEach(linha=>{
     const m = linha.match(/^([A-Za-zÀ-ÿ º°ª\/]{2,45}?)\s*[:：]\s*(.+)$/);
@@ -34113,7 +34192,8 @@ function extrairCamposDeTexto(texto){
       for(const key in LABEL_MAP){
         if(labelNorm === key || labelNorm.startsWith(key) || key.startsWith(labelNorm)){
           const campo = LABEL_MAP[key];
-          const valor = m[2].trim().replace(/\s{2,}/g,' ');
+          let valor = m[2].trim().replace(/\s{2,}/g,' ');
+          valor = valor.replace(/\s*CNPJ\s*[:\-]?\s*[\d.\/\-]{14,18}.*$/i, '').trim();
           if(!dict[campo] && valor) dict[campo] = valor;
           break;
         }
@@ -34125,10 +34205,33 @@ function extrairCamposDeTexto(texto){
     const m = texto.match(/pedido de inser[çc][ãa]o\s*n?[ºo°]?\s*[:\-]?\s*(\d[\d.]{2,})/i) || texto.match(/\bPI\s*n?[ºo°]?\s*[:\-]?\s*(\d[\d.]{2,})/i);
     if(m) dict.pi = m[1];
   }
-  if(!dict.periodo){
-    const m = texto.match(/(\d{2}\/\d{2}\/\d{4})\s*(?:a|à|-|até|e)\s*(\d{2}\/\d{2}\/\d{4})/i);
-    if(m) dict.periodo = m[1] + ' a ' + m[2];
+
+  // ---- Período de veiculação: várias estratégias, da mais específica à mais genérica ----
+  const DATA_RE = '(\\d{1,2}[\\/\\-\\.]\\d{1,2}[\\/\\-\\.]\\d{2,4})';
+  if(dict.dataInicioLabel && dict.dataFimLabel){
+    dict.dataInicioISO = dataBRParaISO(dict.dataInicioLabel);
+    dict.dataFimISO = dataBRParaISO(dict.dataFimLabel);
   }
+  if((!dict.dataInicioISO || !dict.dataFimISO) && dict.periodo){
+    const re = new RegExp(DATA_RE + '\\s*(?:a|à|-|até|e)\\s*' + DATA_RE, 'i');
+    const m = dict.periodo.match(re);
+    if(m){ dict.dataInicioISO = dataBRParaISO(m[1]); dict.dataFimISO = dataBRParaISO(m[2]); }
+  }
+  if(!dict.dataInicioISO || !dict.dataFimISO){
+    // procura duas datas próximas em qualquer lugar do texto (ex: tabelas "De ... Até ...")
+    const re = new RegExp(DATA_RE + '\\s*(?:a|à|-|até|e|/)\\s*' + DATA_RE, 'i');
+    const m = texto.match(re);
+    if(m){ dict.dataInicioISO = dataBRParaISO(m[1]); dict.dataFimISO = dataBRParaISO(m[2]); }
+  }
+  if(!dict.dataInicioISO || !dict.dataFimISO){
+    // fallback: pega a 1ª e a 2ª data isoladas encontradas no documento, se houver pelo menos 2
+    const todas = [...texto.matchAll(new RegExp(DATA_RE, 'g'))].map(m=>m[1]);
+    if(todas.length >= 2){
+      dict.dataInicioISO = dict.dataInicioISO || dataBRParaISO(todas[0]);
+      dict.dataFimISO = dict.dataFimISO || dataBRParaISO(todas[1]);
+    }
+  }
+
   if(!dict.volume){
     const m = texto.match(/([\d.]{3,})\s*impress(?:ões|oes)(?!\s*entreg)/i);
     if(m) dict.volume = m[1];
@@ -34149,17 +34252,59 @@ function extrairCamposDeTexto(texto){
     const m = texto.match(/valor\s*l[ií]quido\s*[:\-]?\s*R\$\s*([\d.,]+)/i);
     if(m) dict.valorLiquido = 'R$ ' + m[1];
   }
-  if(!dict.dimensoes){
-    const matches = texto.match(/\b\d{2,4}\s?[xX]\s?\d{2,4}\b/g);
-    if(matches) dict.dimensoes = [...new Set(matches)].join(', ');
+
+  // ---- Dimensões: lista completa deduplicada (para exibir como seleção) ----
+  const todasDimensoes = texto.match(/\b\d{2,4}\s?[xX]\s?\d{2,4}\b/g) || [];
+  const dimensoesNormalizadas = todasDimensoes.map(d => d.replace(/\s+/g,'').toUpperCase().replace('X','x'));
+  dict.dimensoesArray = [...new Set(dimensoesNormalizadas)];
+  if(!dict.dimensoes && dict.dimensoesArray.length){
+    dict.dimensoes = dict.dimensoesArray.join(', ');
   }
-  if(dict.periodo){
-    const pm = dict.periodo.match(/(\d{2})\/(\d{2})\/(\d{4}).*?(\d{2})\/(\d{2})\/(\d{4})/);
-    if(pm){
-      dict.dataInicioISO = `${pm[3]}-${pm[2]}-${pm[1]}`;
-      dict.dataFimISO = `${pm[6]}-${pm[5]}-${pm[4]}`;
+
+  // ---- Razão Social do Anunciante via CNPJ (ignora o CNPJ do Juicyhub e da Agência) ----
+  if(!dict.anunciante){
+    const contextoIgnorado = /agencia|agência|ve[íi]culo|juicy|juicyhub/i;
+    // 1ª passada: exige que a própria linha (ou a anterior) mencione "Anunciante"/"Cliente"/"Razão Social" explicitamente
+    for(let i=0; i<linhasBrutas.length; i++){
+      const linhaCnpj = linhasBrutas[i];
+      const linhaAnterior = i>0 ? linhasBrutas[i-1] : '';
+      const m = linhaCnpj.match(/CNPJ\s*[:\-]?\s*([\d.\/\-]{14,18})/i);
+      if(!m) continue;
+      const cnpjNum = normalizarCNPJ(m[1]);
+      if(cnpjNum.length !== 14 || cnpjNum === CNPJ_JUICYHUB_DIGITS) continue;
+      if(contextoIgnorado.test(linhaCnpj)) continue;
+      if(!/anunciante|cliente|raz[aã]o social/i.test(linhaCnpj) && !/anunciante|cliente|raz[aã]o social/i.test(linhaAnterior)) continue;
+      let candidato = linhaCnpj.replace(/CNPJ.*$/i,'').trim();
+      if(!candidato && i>0) candidato = linhaAnterior.trim();
+      candidato = candidato.replace(/^(Anunciante|Cliente|Raz[aã]o Social(?:\s*do\s*Anunciante)?)\s*[:\-]?\s*/i,'').trim();
+      if(candidato && candidato.length > 2 && !/^CNPJ/i.test(candidato)){
+        dict.anunciante = candidato;
+        dict.anuncianteCnpj = m[1];
+        break;
+      }
+    }
+    // 2ª passada (fallback): qualquer CNPJ que não seja do Juicyhub nem esteja perto de "Agência"/"Veículo"
+    if(!dict.anunciante){
+      for(let i=0; i<linhasBrutas.length; i++){
+        const linhaCnpj = linhasBrutas[i];
+        const linhaAnterior = i>0 ? linhasBrutas[i-1] : '';
+        const m = linhaCnpj.match(/CNPJ\s*[:\-]?\s*([\d.\/\-]{14,18})/i);
+        if(!m) continue;
+        const cnpjNum = normalizarCNPJ(m[1]);
+        if(cnpjNum.length !== 14 || cnpjNum === CNPJ_JUICYHUB_DIGITS) continue;
+        if(contextoIgnorado.test(linhaCnpj)) continue;
+        let candidato = linhaCnpj.replace(/CNPJ.*$/i,'').trim();
+        if(!candidato && i>0) candidato = linhaAnterior.trim();
+        candidato = candidato.replace(/^(Anunciante|Cliente|Raz[aã]o Social(?:\s*do\s*Anunciante)?)\s*[:\-]?\s*/i,'').trim();
+        if(candidato && candidato.length > 2 && !/^CNPJ/i.test(candidato)){
+          dict.anunciante = candidato;
+          dict.anuncianteCnpj = m[1];
+          break;
+        }
+      }
     }
   }
+
   // normaliza campos numéricos: mantém só o número (evita "18.400 impressões impressões")
   ['volume','entregue'].forEach(campo=>{
     if(dict[campo]){
@@ -34194,6 +34339,25 @@ const CAMPOS_ESSENCIAIS = { // usados para calcular "faltando" de forma relevant
   bonificacao: ['pi','campanha','dataInicioISO','dataFimISO','agencia','volume']
 };
 
+function popularOpcoesDimensoes(lista){
+  const container = document.getElementById('ac_dimensoes_opcoes');
+  const inputTexto = document.getElementById('ac_dimensoes');
+  if(!lista || !lista.length){
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = '<div class="chip-hint">Tamanhos encontrados na PI — desmarque os que não se aplicam a esta campanha:</div>' +
+    lista.map((dim,i)=>`<label><input type="checkbox" checked data-dim="${dim}" onchange="atualizarDimensoesSelecionadas()"> ${dim}</label>`).join('');
+  container.style.display = 'flex';
+  inputTexto.value = lista.join(', ');
+  inputTexto.classList.add('campo-auto');
+}
+function atualizarDimensoesSelecionadas(){
+  const marcados = [...document.querySelectorAll('#ac_dimensoes_opcoes input[type="checkbox"]:checked')].map(cb=>cb.dataset.dim);
+  document.getElementById('ac_dimensoes').value = marcados.join(', ');
+}
+
 function aplicarDictNaAba(tab, dict){
   const map = FIELD_MAP[tab];
   let preenchidos = 0;
@@ -34202,12 +34366,17 @@ function aplicarDictNaAba(tab, dict){
     const el = document.getElementById(id);
     if(!el) return;
     el.classList.remove('campo-auto','campo-revisar');
+    if(campo === 'dimensoes') return; // tratado à parte via checkboxes
     if(dict[campo]){
       el.value = dict[campo];
       el.classList.add('campo-auto');
       preenchidos++;
     }
   });
+  if(tab === 'acordo' && dict.dimensoesArray && dict.dimensoesArray.length){
+    popularOpcoesDimensoes(dict.dimensoesArray);
+    preenchidos++;
+  }
   const faltando = CAMPOS_ESSENCIAIS[tab].filter(c=>{
     const id = map[c];
     const el = document.getElementById(id);
@@ -34219,15 +34388,71 @@ function aplicarDictNaAba(tab, dict){
   return { preenchidos, faltando: faltando.length };
 }
 
-function aplicarSomenteEntregue(tab, dict){
-  if(!dict.entregue) return false;
+function aplicarSomenteEntregue(tab, valor){
+  if(!valor) return false;
   const map = FIELD_MAP[tab];
   const el = document.getElementById(map.entregue);
   if(!el) return false;
-  el.value = dict.entregue;
+  el.value = valor;
   el.classList.remove('campo-revisar');
   el.classList.add('campo-auto');
   return true;
+}
+
+// Identifica o TOTAL de impressões entregues em um relatório:
+// 1) procura uma linha de "Total" explícita (mais confiável)
+// 2) senão, soma linhas de uma tabela (ex.: relatório diário com data + impressões)
+// 3) por último, cai no padrão simples "impressões entregues: X"
+function extrairTotalEntregue(texto){
+  const linhas = texto.split('\n');
+
+  // ---- 1) Total explícito ----
+  const padroesTotal = [
+    /total\s*(?:de|geral)?\s*impress(?:ões|oes)\s*entregues?\s*[:\-]?\s*([\d.,]+)/i,
+    /impress(?:ões|oes)\s*entregues?\s*[:\-]?\s*total\s*[:\-]?\s*([\d.,]+)/i,
+    /total\s*entregue\s*[:\-]?\s*([\d.,]+)/i,
+    /total\s*geral\s*[:\-]?\s*([\d.,]+)/i,
+  ];
+  for(const re of padroesTotal){
+    const m = texto.match(re);
+    if(m){
+      const val = Math.round(parseFloat(m[1].replace(/\./g,'').replace(',', '.')));
+      if(!isNaN(val) && val > 0) return { valor: val, metodo: 'total explícito no PDF' };
+    }
+  }
+  // linha isolada só com "Total" e um número (comum em rodapé de tabelas)
+  for(const linha of linhas){
+    const t = linha.trim();
+    const m = t.match(/^total\s*[:\-]?\s*([\d.,]+)\s*(?:impress(?:ões|oes))?$/i);
+    if(m){
+      const val = Math.round(parseFloat(m[1].replace(/\./g,'').replace(',', '.')));
+      if(!isNaN(val) && val > 0) return { valor: val, metodo: 'linha "Total" no PDF' };
+    }
+  }
+
+  // ---- 2) Soma de linhas tabulares (ex.: data + impressões por dia/linha) ----
+  let soma = 0, qtdLinhas = 0;
+  linhas.forEach(linha=>{
+    const t = linha.trim();
+    // linha começando com data (dd/mm ou dd/mm/aaaa) e terminando em número (impressões daquela linha)
+    const m = t.match(/^\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b.*?([\d]{1,3}(?:[.,]\d{3})*)\s*$/);
+    if(m && !/total/i.test(t)){
+      const num = Math.round(parseFloat(m[1].replace(/\./g,'').replace(',', '.')));
+      if(!isNaN(num) && num > 0){ soma += num; qtdLinhas++; }
+    }
+  });
+  if(qtdLinhas >= 2 && soma > 0){
+    return { valor: soma, metodo: `soma de ${qtdLinhas} linhas da tabela` };
+  }
+
+  // ---- 3) Fallback: padrão simples "impressões entregues: X" (sem contexto de total/tabela) ----
+  const dictSimples = extrairCamposDeTexto(texto);
+  if(dictSimples.entregue){
+    const val = parseInt(String(dictSimples.entregue).replace(/\./g,''), 10);
+    if(!isNaN(val) && val > 0) return { valor: val, metodo: 'valor único encontrado no PDF' };
+  }
+
+  return null;
 }
 
 function atualizarPreviewAbaAtiva(){
@@ -34277,18 +34502,21 @@ document.getElementById('upload_relatorio').addEventListener('change', async (e)
   status.textContent = 'Lendo relatório de entrega...';
   try{
     const texto = await extrairTextoPDF(file);
-    const dict = extrairCamposDeTexto(texto);
-    const okDecl = aplicarSomenteEntregue('declaracao', dict);
-    const okBoni = aplicarSomenteEntregue('bonificacao', dict);
+    const resultado = extrairTotalEntregue(texto);
 
-    sugerirConfirmacaoDeclaracao();
-    sugerirResultadoBonificacao();
-    atualizarPreviewAbaAtiva();
+    if(resultado){
+      const okDecl = aplicarSomenteEntregue('declaracao', resultado.valor);
+      const okBoni = aplicarSomenteEntregue('bonificacao', resultado.valor);
+      sugerirConfirmacaoDeclaracao();
+      sugerirResultadoBonificacao();
+      atualizarPreviewAbaAtiva();
 
-    status.className = (okDecl || okBoni) ? 'status-msg status-ok' : 'status-msg status-warn';
-    status.textContent = (okDecl || okBoni)
-      ? 'Impressões entregues preenchidas na Declaração e na Carta de Bonificação. Revise antes de gerar.'
-      : 'Não encontrei o número de impressões entregues neste PDF. Preencha manualmente.';
+      status.className = 'status-msg status-ok';
+      status.textContent = `Total de ${resultado.valor.toLocaleString('pt-BR')} impressões entregues identificado (${resultado.metodo}). Preenchido na Declaração e na Carta de Bonificação — confira antes de gerar.`;
+    } else {
+      status.className = 'status-msg status-warn';
+      status.textContent = 'Não consegui identificar o total de impressões entregues neste PDF. Preencha manualmente.';
+    }
   }catch(err){
     status.className = 'status-msg status-err';
     status.textContent = 'Não consegui ler esse PDF automaticamente. (' + err.message + ')';
