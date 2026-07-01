@@ -419,6 +419,25 @@
       <div class="field"><label>CPF padrão do signatário</label><input type="text" id="cfg_cpf" value="219.503.018-69"></div>
       <button class="btn btn-secondary" onclick="salvarConfig()">Salvar dados fixos</button>
       <div id="cfgStatus"></div>
+
+      <h3 style="margin-top:26px;">Tabela de preços (Mediakit)</h3>
+      <p style="font-size:12.5px; color:#777;">
+        Usada para sugerir automaticamente a "Justificativa do Valor Praticado" na Carta Acordo — o sistema compara o CPM da campanha com o valor de tabela da posição correspondente e já indica se houve ou não desconto. Ajuste aqui sempre que a tabela comercial do mediakit mudar.
+      </p>
+      <table id="tabelaPrecosEl" style="width:100%; border-collapse:collapse; font-size:12.5px; margin-bottom:10px;">
+        <thead>
+          <tr style="text-align:left; border-bottom:2px solid var(--borda);">
+            <th style="padding:6px 4px;">Posição / Formato</th>
+            <th style="padding:6px 4px; width:110px;">CPM (R$)</th>
+            <th style="padding:6px 4px; width:110px;">Modelo</th>
+            <th style="width:30px;"></th>
+          </tr>
+        </thead>
+        <tbody id="tabelaPrecosBody"></tbody>
+      </table>
+      <button class="btn btn-ghost" type="button" onclick="adicionarLinhaTabelaPrecos()">+ Adicionar linha</button>
+      <button class="btn btn-secondary" type="button" onclick="salvarTabelaPrecos()">Salvar tabela de preços</button>
+      <div id="tabelaPrecosStatus"></div>
     </div>
 
   </div>
@@ -33703,6 +33722,80 @@ function salvarConfig(){
   loadConfig();
 }
 
+// ---------- Tabela de preços (Mediakit) — configurável, usada na sugestão de justificativa ----------
+const TABELA_PRECOS_PADRAO = [
+  { posicao: 'Topo (728x90 / 320x50)', cpm: '160,00', modelo: 'CPM' },
+  { posicao: 'Seção Home (300x250)', cpm: '160,00', modelo: 'CPM' },
+  { posicao: 'Middle (180x170 / 170x180)', cpm: '160,00', modelo: 'CPM' },
+];
+
+function carregarTabelaPrecos(){
+  try{
+    const salvo = localStorage.getItem('tabela_precos_mediakit');
+    if(salvo) return JSON.parse(salvo);
+  }catch(e){ /* ignora e usa padrão */ }
+  return TABELA_PRECOS_PADRAO.slice();
+}
+
+function renderizarTabelaPrecos(){
+  const tabela = carregarTabelaPrecos();
+  const body = document.getElementById('tabelaPrecosBody');
+  body.innerHTML = tabela.map((linha,i)=>`
+    <tr data-idx="${i}">
+      <td style="padding:4px 4px;"><input type="text" style="width:100%; padding:5px 6px; border:1px solid var(--borda); border-radius:4px; font-size:12.5px;" value="${(linha.posicao||'').replace(/"/g,'&quot;')}" data-campo="posicao"></td>
+      <td style="padding:4px 4px;"><input type="text" style="width:100%; padding:5px 6px; border:1px solid var(--borda); border-radius:4px; font-size:12.5px;" value="${(linha.cpm||'').replace(/"/g,'&quot;')}" data-campo="cpm"></td>
+      <td style="padding:4px 4px;"><input type="text" style="width:100%; padding:5px 6px; border:1px solid var(--borda); border-radius:4px; font-size:12.5px;" value="${(linha.modelo||'').replace(/"/g,'&quot;')}" data-campo="modelo"></td>
+      <td style="text-align:center;"><button type="button" onclick="removerLinhaTabelaPrecos(${i})" style="border:none; background:none; color:#c33; cursor:pointer; font-size:15px;" title="Remover linha">✕</button></td>
+    </tr>
+  `).join('');
+}
+
+function adicionarLinhaTabelaPrecos(){
+  const tabela = carregarTabelaPrecos();
+  tabela.push({ posicao:'', cpm:'', modelo:'CPM' });
+  localStorage.setItem('tabela_precos_mediakit', JSON.stringify(tabela));
+  renderizarTabelaPrecos();
+}
+function removerLinhaTabelaPrecos(idx){
+  const tabela = carregarTabelaPrecos();
+  tabela.splice(idx,1);
+  localStorage.setItem('tabela_precos_mediakit', JSON.stringify(tabela));
+  renderizarTabelaPrecos();
+}
+function salvarTabelaPrecos(){
+  const linhas = [...document.querySelectorAll('#tabelaPrecosBody tr')].map(tr=>{
+    const obj = {};
+    tr.querySelectorAll('input[data-campo]').forEach(inp=> obj[inp.dataset.campo] = inp.value.trim());
+    return obj;
+  }).filter(l=> l.posicao || l.cpm);
+  localStorage.setItem('tabela_precos_mediakit', JSON.stringify(linhas));
+  renderizarTabelaPrecos();
+  const s = document.getElementById('tabelaPrecosStatus');
+  s.className = 'status-msg status-ok';
+  s.style.display = 'block';
+  s.textContent = 'Tabela de preços salva neste navegador.';
+  sugerirJustificativaAcordo();
+}
+
+// Busca fuzzy: tenta casar o texto da posição/formato digitado com uma linha da tabela salva
+function buscarNaTabelaPrecos(textoPosicao){
+  if(!textoPosicao) return null;
+  const tabela = carregarTabelaPrecos();
+  const alvo = removerAcentos(textoPosicao).toLowerCase();
+  // 1) tenta achar por palavras-chave em comum (ex: "home", "topo", "middle", dimensão específica)
+  let melhor = null, melhorScore = 0;
+  tabela.forEach(linha=>{
+    if(!linha.posicao) return;
+    const candidata = removerAcentos(linha.posicao).toLowerCase();
+    const palavrasAlvo = alvo.split(/[^a-z0-9]+/).filter(Boolean);
+    const palavrasCand = candidata.split(/[^a-z0-9]+/).filter(Boolean);
+    let score = 0;
+    palavrasAlvo.forEach(p=>{ if(p.length>=3 && palavrasCand.some(c=>c.includes(p) || p.includes(c))) score++; });
+    if(score > melhorScore){ melhorScore = score; melhor = linha; }
+  });
+  return melhorScore > 0 ? melhor : null;
+}
+
 // ---------- Utilidades ----------
 function fmtDataExtenso(isoDate){
   const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
@@ -33774,15 +33867,45 @@ function renderPreview(model){
 
 // ---------- Sugestão automática: Justificativa (Carta Acordo) ----------
 function sugerirJustificativaAcordo(){
-  const cpm = document.getElementById('ac_cpm_tabela').value || '[valor CPM]';
   const formato = document.getElementById('ac_posicao').value || document.getElementById('ac_formato').value || '[formato]';
   const bruto = document.getElementById('ac_valor_bruto').value || '[valor bruto]';
-  const desconto = document.getElementById('ac_desconto').value;
+  const selectDesconto = document.getElementById('ac_desconto');
+  const campoCpm = document.getElementById('ac_cpm_tabela');
+
+  const linhaTabela = buscarNaTabelaPrecos(formato);
+  let cpmDigitado = campoCpm.value;
+
+  // se o campo de CPM ainda está vazio, pré-preenche com o valor da tabela de preços configurada
+  if(!cpmDigitado && linhaTabela && linhaTabela.cpm){
+    cpmDigitado = 'R$ ' + linhaTabela.cpm;
+    campoCpm.value = cpmDigitado;
+  }
+
+  let desconto = selectDesconto.value;
+  if(linhaTabela && linhaTabela.cpm){
+    const valorTabela = parseNumBR(linhaTabela.cpm);
+    const valorPraticado = parseNumBR(cpmDigitado);
+    if(valorPraticado > 0 && valorTabela > 0){
+      desconto = (Math.abs(valorPraticado - valorTabela) < 0.01) ? 'nao' : 'sim';
+      selectDesconto.value = desconto;
+    }
+  }
+
+  const cpm = cpmDigitado || '[valor CPM]';
   let texto;
   if(desconto === 'nao'){
     texto = `Conforme tabela vigente do Mediakit Juicy Santos, o valor aplicado nesta campanha foi de ${cpm} CPM, exatamente correspondente ao valor de tabela dos formatos ${formato}, não havendo concessão de desconto comercial adicional sobre o CPM praticado. A negociação observou os parâmetros comerciais vigentes do veículo, considerando o volume contratado, a segmentação regional da campanha e a entrega em inventário qualificado do portal Juicy Santos.\n\nDessa forma, declaramos que o valor bruto de ${bruto} encontra-se integralmente compatível com a tabela comercial vigente do veículo e com as condições negociadas entre as partes.`;
   } else {
-    texto = `O valor de ${cpm} CPM aplicado nesta campanha foi resultado de negociação comercial específica entre o veículo e a agência, considerando o volume contratado, a segmentação da campanha e a priorização de inventário qualificado no portal Juicy Santos.\n\nDessa forma, o valor praticado encontra-se compatível com a política comercial vigente do veículo e com os parâmetros de mercado para campanhas de perfil semelhante.`;
+    let trechoComparacao = '';
+    if(linhaTabela && linhaTabela.cpm){
+      const valorTabela = parseNumBR(linhaTabela.cpm);
+      const valorPraticado = parseNumBR(cpmDigitado);
+      if(valorTabela > 0 && valorPraticado > 0 && valorPraticado < valorTabela){
+        const percentual = (((valorTabela - valorPraticado) / valorTabela) * 100).toFixed(1);
+        trechoComparacao = ` — a tabela vigente do Mediakit prevê R$ ${linhaTabela.cpm} CPM para essa posição, o que representa um desconto de aproximadamente ${percentual}% sobre o valor de tabela`;
+      }
+    }
+    texto = `O valor de ${cpm} CPM aplicado nesta campanha foi resultado de negociação comercial específica entre o veículo e a agência${trechoComparacao}, considerando o volume contratado, a segmentação da campanha e a priorização de inventário qualificado no portal Juicy Santos.\n\nDessa forma, o valor praticado encontra-se compatível com a política comercial vigente do veículo e com os parâmetros de mercado para campanhas de perfil semelhante.`;
   }
   document.getElementById('ac_justificativa').value = texto;
 }
@@ -34213,13 +34336,14 @@ function extrairCamposDeTexto(texto){
     dict.dataFimISO = dataBRParaISO(dict.dataFimLabel);
   }
   if((!dict.dataInicioISO || !dict.dataFimISO) && dict.periodo){
-    const re = new RegExp(DATA_RE + '\\s*(?:a|à|-|até|e)\\s*' + DATA_RE, 'i');
+    // aceita qualquer separador entre as duas datas: "a", "à", "-", "até", espaço só, etc.
+    const re = new RegExp(DATA_RE + '[^\\d]{0,20}' + DATA_RE, 'i');
     const m = dict.periodo.match(re);
     if(m){ dict.dataInicioISO = dataBRParaISO(m[1]); dict.dataFimISO = dataBRParaISO(m[2]); }
   }
   if(!dict.dataInicioISO || !dict.dataFimISO){
     // procura duas datas próximas em qualquer lugar do texto (ex: tabelas "De ... Até ...")
-    const re = new RegExp(DATA_RE + '\\s*(?:a|à|-|até|e|/)\\s*' + DATA_RE, 'i');
+    const re = new RegExp(DATA_RE + '[^\\d]{0,20}' + DATA_RE, 'i');
     const m = texto.match(re);
     if(m){ dict.dataInicioISO = dataBRParaISO(m[1]); dict.dataFimISO = dataBRParaISO(m[2]); }
   }
@@ -34254,8 +34378,8 @@ function extrairCamposDeTexto(texto){
   }
 
   // ---- Dimensões: lista completa deduplicada (para exibir como seleção) ----
-  const todasDimensoes = texto.match(/\b\d{2,4}\s?[xX]\s?\d{2,4}\b/g) || [];
-  const dimensoesNormalizadas = todasDimensoes.map(d => d.replace(/\s+/g,'').toUpperCase().replace('X','x'));
+  const todasDimensoes = texto.match(/\b\d{2,4}\s{0,3}[x×X\*]\s{0,3}\d{2,4}\b/g) || [];
+  const dimensoesNormalizadas = todasDimensoes.map(d => d.replace(/\s+/g,'').toUpperCase().replace(/[×\*]/g,'X').replace('X','x'));
   dict.dimensoesArray = [...new Set(dimensoesNormalizadas)];
   if(!dict.dimensoes && dict.dimensoesArray.length){
     dict.dimensoes = dict.dimensoesArray.join(', ');
@@ -34526,6 +34650,7 @@ document.getElementById('upload_relatorio').addEventListener('change', async (e)
 
 // ---------- Inicialização ----------
 loadConfig();
+renderizarTabelaPrecos();
 sugerirJustificativaAcordo();
 sugerirConfirmacaoDeclaracao();
 sugerirResultadoBonificacao();
