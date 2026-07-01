@@ -34275,7 +34275,7 @@ const LABEL_MAP = {
   'fim da veiculacao':'dataFimLabel','fim':'dataFimLabel','termino':'dataFimLabel','data fim':'dataFimLabel','data de termino':'dataFimLabel','data de fim':'dataFimLabel','ate':'dataFimLabel',
   'praca':'praca',
   'agencia':'agencia',
-  'anunciante':'anunciante','razao social do anunciante':'anunciante','cliente':'anunciante','razao social':'anunciante',
+  'anunciante':'anunciante','razao social do anunciante':'anunciante','razao social do cliente':'anunciante','cliente':'anunciante',
   'formato':'formato',
   'dimensoes':'dimensoes','dimensao':'dimensoes','tamanho':'dimensoes','tamanhos':'dimensoes','sizes':'dimensoes','size':'dimensoes',
   'modelo de compra':'modeloCompra','modelo':'modeloCompra',
@@ -34314,6 +34314,10 @@ function extrairCamposDeTexto(texto){
       for(const key in LABEL_MAP){
         if(labelNorm === key || labelNorm.startsWith(key) || key.startsWith(labelNorm)){
           const campo = LABEL_MAP[key];
+          // "Razão Social" solta (do cabeçalho da agência/veículo) NUNCA é anunciante:
+          // só aceita anunciante se o rótulo citar explicitamente anunciante/cliente e não citar veículo/agência
+          if(campo === 'anunciante' && (!/anunciante|cliente/.test(labelNorm) || /veiculo|agencia/.test(labelNorm))) break;
+          if(campo === 'agencia' && /veiculo/.test(labelNorm)) break;
           let valor = m[2].trim().replace(/\s{2,}/g,' ');
           valor = valor.replace(/\s*CNPJ\s*[:\-]?\s*[\d.\/\-]{14,18}.*$/i, '').trim();
           valor = valor.replace(/\s*\([^)]*\)\s*$/, '').trim(); // remove anotações tipo "(BRUTO TABELA)"
@@ -34455,6 +34459,46 @@ function extrairCamposDeTexto(texto){
     dict.dimensoes = dict.dimensoesArray.join(', ');
   }
 
+  // ---- Saneamento: agência nunca pode ser Juicyhub/Governo; anunciante nunca pode ser a agência ----
+  const PADRAO_GOV = /governo|secom|secretaria|prefeitura|estado de|munic[íi]pio/i;
+  const PADRAO_VEICULO = /juicy/i;
+  if(dict.agencia && (PADRAO_GOV.test(dict.agencia) || PADRAO_VEICULO.test(dict.agencia))) delete dict.agencia;
+  if(dict.anunciante && PADRAO_VEICULO.test(dict.anunciante)) delete dict.anunciante;
+
+  // ---- Agência: se o rótulo "Agência:" não resolveu, busca o nome no TOPO da PI (cabeçalho/timbre) ----
+  if(!dict.agencia){
+    const topo = linhas.slice(0, 15);
+    for(const l of topo){
+      if(l.length < 4 || l.length > 90) continue;
+      if(PADRAO_GOV.test(l) || PADRAO_VEICULO.test(l)) continue;
+      if(/pedido de inser|\bPI\b|cnpj|fone|fax|telefone|cep\b|rua |avenida |av\.|e-?mail|@|www\.|http/i.test(l)) continue;
+      if(/\d{2}[\/\-\.]\d{2}/.test(l)) continue; // linha com data
+      if(/(ltda|s\/a|s\.a\.?|eireli|epp|me\b|propaganda|publicidade|comunica[çc][ãa]o|creative|m[ií]dia|marketing|agency|ag[êe]ncia)/i.test(l)){
+        dict.agencia = l.replace(/^ag[êe]ncia\s*[:\-]?\s*/i,'').replace(/\s*CNPJ.*$/i,'').trim();
+        break;
+      }
+    }
+  }
+
+  // ---- Anunciante: prioridade máxima para Governo / SECOM / Secretaria de Comunicação ----
+  if(!dict.anunciante || !PADRAO_GOV.test(dict.anunciante)){
+    const mGov = texto.match(/Governo[^\n,;]{0,60}?Secretaria\s+de\s+Comunica[çc][ãa]o[^\n,;]{0,40}/i)
+      || texto.match(/Secretaria\s+de\s+Comunica[çc][ãa]o(?:\s+d[oea]s?\s+[A-ZÀ-ÿ][^\n,;]{0,50})?/i)
+      || texto.match(/Governo\s+d[oe]\s+Estado[^\n,;]{0,50}/i)
+      || texto.match(/\bSECOM\b[^\n,;]{0,50}/i)
+      || texto.match(/Prefeitura[^\n,;]{0,60}/i);
+    if(mGov){
+      let valorGov = mGov[0].trim().replace(/\s{2,}/g,' ').replace(/\s*CNPJ.*$/i,'').trim();
+      if(/^Secretaria/i.test(valorGov)) valorGov = 'Governo - ' + valorGov;
+      dict.anunciante = valorGov;
+    }
+  }
+
+  // se anunciante acabou igual à agência, descarta (o CNPJ abaixo pode recuperar o correto)
+  if(dict.anunciante && dict.agencia && removerAcentos(dict.anunciante).toLowerCase() === removerAcentos(dict.agencia).toLowerCase()){
+    delete dict.anunciante;
+  }
+
   // ---- Razão Social do Anunciante via CNPJ (ignora o CNPJ do Juicyhub e da Agência) ----
   function pareceNomeDeEmpresa(candidato){
     if(!candidato || candidato.length < 3 || candidato.length > 100) return false;
@@ -34509,6 +34553,11 @@ function extrairCamposDeTexto(texto){
         }
       }
     }
+  }
+
+  // checagem final: se o anunciante encontrado for a própria agência, descarta
+  if(dict.anunciante && dict.agencia && removerAcentos(dict.anunciante).toLowerCase().includes(removerAcentos(dict.agencia).toLowerCase().slice(0,12))){
+    delete dict.anunciante;
   }
 
   // normaliza campos numéricos: mantém só o número (evita "18.400 impressões impressões")
