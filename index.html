@@ -33914,6 +33914,27 @@ function sugerirJustificativaAcordo(){
   document.getElementById(id).addEventListener('change', sugerirJustificativaAcordo);
 });
 
+// ---------- Prefixo "R$ " fixo nos campos monetários ----------
+function fixarPrefixoReal(el){
+  if(!el) return;
+  const normalizar = ()=>{
+    const v = el.value.replace(/R\$\s*/gi, '').trim();
+    el.value = v ? 'R$ ' + v : '';
+  };
+  el.addEventListener('input', ()=>{
+    if(el.value && !el.value.startsWith('R$ ')){
+      const antes = el.value.length;
+      const pos = el.selectionStart;
+      normalizar();
+      const delta = el.value.length - antes;
+      try{ el.setSelectionRange(Math.max(0, pos + delta), Math.max(0, pos + delta)); }catch(e){}
+    }
+  });
+  el.addEventListener('blur', normalizar);
+  normalizar();
+}
+['ac_cpm_tabela','ac_valor_bruto','ac_valor_liquido'].forEach(id=>fixarPrefixoReal(document.getElementById(id)));
+
 // ---------- Sugestão automática: Confirmação de entrega (Declaração) ----------
 function sugerirConfirmacaoDeclaracao(){
   const contratado = parseNumBR(document.getElementById('de_contratado').value);
@@ -34345,58 +34366,76 @@ function extrairCamposDeTexto(texto){
     }
   }
 
-  // ---- Período de veiculação: várias estratégias, da mais específica à mais genérica ----
+  // ---- Período de veiculação: estratégias por PALAVRA-CHAVE primeiro (período/veiculação/
+  // vigência/início/fim), genéricas só em último caso — evita capturar data de emissão da PI.
+  // Toda atribuição passa por validação: fim >= início.
   const DATA_RE = '(\\d{1,2}[\\/\\-\\.]\\d{1,2}[\\/\\-\\.]\\d{2,4})';
-  if(dict.dataInicioLabel && dict.dataFimLabel){
-    dict.dataInicioISO = dataBRParaISO(dict.dataInicioLabel);
-    dict.dataFimISO = dataBRParaISO(dict.dataFimLabel);
+  const DATA_SEM_ANO_RE = '(\\d{1,2})[\\/\\-\\.](\\d{1,2})(?![\\/\\-\\.]?\\d)';
+  const KW_PERIODO = '(?:per[íi]odo(?:\\s*(?:de|da))?\\s*(?:veicula[çc][ãa]o|vig[êe]ncia|campanha)?|veicula[çc][ãa]o|vig[êe]ncia)';
+  const anoRef = ()=> (texto.match(/\b(20\d{2})\b/) || [null, String(new Date().getFullYear())])[1];
+  const setPeriodo = (iniISO, fimISO)=>{
+    if(!iniISO || !fimISO) return false;
+    if(fimISO < iniISO) return false; // ISO compara lexicograficamente
+    dict.dataInicioISO = iniISO;
+    dict.dataFimISO = fimISO;
+    return true;
+  };
+  const temPeriodo = ()=> !!(dict.dataInicioISO && dict.dataFimISO);
+
+  // 1) Rótulos "Início:" / "Fim:" capturados via LABEL_MAP
+  if(!temPeriodo() && dict.dataInicioLabel && dict.dataFimLabel){
+    setPeriodo(dataBRParaISO(dict.dataInicioLabel), dataBRParaISO(dict.dataFimLabel));
   }
-  if((!dict.dataInicioISO || !dict.dataFimISO) && dict.periodo){
-    // aceita qualquer separador entre as duas datas: "a", "à", "-", "até", espaço só, etc.
-    const re = new RegExp(DATA_RE + '[^\\d]{0,20}' + DATA_RE, 'i');
-    const m = dict.periodo.match(re);
-    if(m){ dict.dataInicioISO = dataBRParaISO(m[1]); dict.dataFimISO = dataBRParaISO(m[2]); }
+  // 2) Campo "período" capturado via rótulo — datas com ano
+  if(!temPeriodo() && dict.periodo){
+    const m = dict.periodo.match(new RegExp(DATA_RE + '[^\\d]{0,20}' + DATA_RE, 'i'));
+    if(m) setPeriodo(dataBRParaISO(m[1]), dataBRParaISO(m[2]));
   }
-  if(!dict.dataInicioISO || !dict.dataFimISO){
-    // procura duas datas próximas em qualquer lugar do texto (ex: tabelas "De ... Até ...")
-    const re = new RegExp(DATA_RE + '[^\\d]{0,20}' + DATA_RE, 'i');
-    const m = texto.match(re);
-    if(m){ dict.dataInicioISO = dataBRParaISO(m[1]); dict.dataFimISO = dataBRParaISO(m[2]); }
+  // 2b) Campo "período" — datas sem ano (ex.: "02/06 a 07/06")
+  if(!temPeriodo() && dict.periodo){
+    const m = dict.periodo.match(new RegExp(DATA_SEM_ANO_RE + '[^\\d]{1,15}' + DATA_SEM_ANO_RE));
+    if(m){
+      const a = anoRef();
+      setPeriodo(`${a}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`, `${a}-${m[4].padStart(2,'0')}-${m[3].padStart(2,'0')}`);
+    }
   }
-  if(!dict.dataInicioISO || !dict.dataFimISO){
-    // fallback: pega a 1ª e a 2ª data isoladas encontradas no documento, se houver pelo menos 2
+  // 3) Palavra-chave no texto (com ou sem ":"), datas com ano
+  if(!temPeriodo()){
+    const m = texto.match(new RegExp(KW_PERIODO + '\\s*[:\\-]?\\s*(?:de\\s*)?' + DATA_RE + '[^\\d]{0,20}' + DATA_RE, 'i'));
+    if(m) setPeriodo(dataBRParaISO(m[1]), dataBRParaISO(m[2]));
+  }
+  // 4) "Início ... / Fim|Término ..." em qualquer lugar do texto, com ou sem ":"
+  if(!temPeriodo()){
+    const mi = texto.match(new RegExp('in[íi]cio(?:\\s*(?:de|da)?\\s*veicula[çc][ãa]o)?\\s*[:\\-]?\\s*' + DATA_RE, 'i'));
+    const mf = texto.match(new RegExp('(?:fim|t[ée]rmino|final)(?:\\s*(?:de|da)?\\s*veicula[çc][ãa]o)?\\s*[:\\-]?\\s*' + DATA_RE, 'i'));
+    if(mi && mf) setPeriodo(dataBRParaISO(mi[1]), dataBRParaISO(mf[1]));
+  }
+  // 4b) Layout de tabela: "De ... Até ..." com datas com ano
+  if(!temPeriodo()){
+    const m = texto.match(new RegExp('\\bde\\s*[:\\-]?\\s*' + DATA_RE + '\\s*(?:a|à|at[ée])\\s*[:\\-]?\\s*' + DATA_RE, 'i'));
+    if(m) setPeriodo(dataBRParaISO(m[1]), dataBRParaISO(m[2]));
+  }
+  // 5) Palavra-chave com datas sem ano
+  if(!temPeriodo()){
+    const m = texto.match(new RegExp(KW_PERIODO + '\\s*[:\\-]?\\s*(?:de\\s*)?' + DATA_SEM_ANO_RE + '[^\\d]{1,15}' + DATA_SEM_ANO_RE, 'i'));
+    if(m){
+      const a = anoRef();
+      setPeriodo(`${a}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`, `${a}-${m[4].padStart(2,'0')}-${m[3].padStart(2,'0')}`);
+    }
+  }
+  // 6) FALLBACK genérico: duas datas próximas em qualquer lugar (validação fim>=início filtra pares errados)
+  if(!temPeriodo()){
+    const re = new RegExp(DATA_RE + '[^\\d]{0,20}' + DATA_RE, 'gi');
+    let m;
+    while(!temPeriodo() && (m = re.exec(texto)) !== null){
+      setPeriodo(dataBRParaISO(m[1]), dataBRParaISO(m[2]));
+    }
+  }
+  // 7) Último recurso: tenta pares consecutivos de datas isoladas até achar um par válido
+  if(!temPeriodo()){
     const todas = [...texto.matchAll(new RegExp(DATA_RE, 'g'))].map(m=>m[1]);
-    if(todas.length >= 2){
-      dict.dataInicioISO = dict.dataInicioISO || dataBRParaISO(todas[0]);
-      dict.dataFimISO = dict.dataFimISO || dataBRParaISO(todas[1]);
-    }
-  }
-  if((!dict.dataInicioISO || !dict.dataFimISO)){
-    // busca direta por "Período de Veiculação" mesmo sem ":" (layout de tabela/coluna), com ano
-    const reComAno = new RegExp('per[íi]odo\\s*(?:de)?\\s*veicula[çc][ãa]o\\s*[:\\-]?\\s*' + DATA_RE + '[^\\d]{0,15}' + DATA_RE, 'i');
-    const m = texto.match(reComAno);
-    if(m){ dict.dataInicioISO = dataBRParaISO(m[1]); dict.dataFimISO = dataBRParaISO(m[2]); }
-  }
-  if((!dict.dataInicioISO || !dict.dataFimISO) && dict.periodo){
-    // período sem ano, ex.: "02/06 a 07/06" — usa um ano encontrado no documento, senão o ano atual
-    const DATA_SEM_ANO_RE = '(\\d{1,2})[\\/\\-\\.](\\d{1,2})';
-    const re = new RegExp(DATA_SEM_ANO_RE + '[^\\d]{1,15}' + DATA_SEM_ANO_RE);
-    const m = dict.periodo.match(re);
-    if(m){
-      const anoRef = (texto.match(/\b(20\d{2})\b/) || [null, String(new Date().getFullYear())])[1];
-      dict.dataInicioISO = `${anoRef}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
-      dict.dataFimISO = `${anoRef}-${m[4].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
-    }
-  }
-  if(!dict.dataInicioISO || !dict.dataFimISO){
-    // último recurso: "Período de Veiculação" sem ":" e sem ano nas datas (ex.: "02/06 a 07/06")
-    const DATA_SEM_ANO_RE = '(\\d{1,2})[\\/\\-\\.](\\d{1,2})';
-    const reSemAno = new RegExp('per[íi]odo\\s*(?:de)?\\s*veicula[çc][ãa]o\\s*[:\\-]?\\s*' + DATA_SEM_ANO_RE + '[^\\d]{1,15}' + DATA_SEM_ANO_RE, 'i');
-    const m = texto.match(reSemAno);
-    if(m){
-      const anoRef = (texto.match(/\b(20\d{2})\b/) || [null, String(new Date().getFullYear())])[1];
-      dict.dataInicioISO = `${anoRef}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
-      dict.dataFimISO = `${anoRef}-${m[4].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+    for(let i=0; i<todas.length-1 && !temPeriodo(); i++){
+      setPeriodo(dataBRParaISO(todas[i]), dataBRParaISO(todas[i+1]));
     }
   }
 
@@ -34408,6 +34447,25 @@ function extrairCamposDeTexto(texto){
     const m = texto.match(/impress(?:ões|oes)\s*entregues?\s*[:\-]?\s*([\d.]{3,})/i) || texto.match(/entregues?\s*[:\-]?\s*([\d.]{3,})\s*impress/i);
     if(m) dict.entregue = m[1];
   }
+
+  // ---- Saneamento de valores monetários: normaliza para "R$ x.xxx,xx" e descarta
+  // valores truncados/incompletos (ex.: "R$ 2." vindo de quebra de linha do PDF),
+  // liberando os fallbacks abaixo para tentar recapturar o valor completo.
+  const sanearMonetarios = ()=>{
+    ['cpm','valorBruto','valorLiquido'].forEach(campo=>{
+      if(!dict[campo]) return;
+      const mm = String(dict[campo]).match(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:,\d{1,2})?)/);
+      const num = mm ? mm[1] : '';
+      const soDigitos = num.replace(/\D/g,'');
+      if(!num || (!num.includes(',') && soDigitos.length < 2)){
+        delete dict[campo]; // truncado ou vazio — deixa os fallbacks agirem
+      } else {
+        dict[campo] = 'R$ ' + num;
+      }
+    });
+  };
+  sanearMonetarios();
+
   if(!dict.cpm){
     const m = texto.match(/CUSTO\s*(?:DO)?\s*CPM\s*[:\-]?\s*R\$\s*([\d.,]+)/i)
       || texto.match(/R\$\s*([\d.,]+)\s*\(?BRUTO\s*TABELA\)?/i)
@@ -34439,6 +34497,7 @@ function extrairCamposDeTexto(texto){
     const m = texto.match(/valor\s*l[ií]quido\s*[:\-]?\s*R\$\s*([\d.,]+)/i);
     if(m) dict.valorLiquido = 'R$ ' + m[1];
   }
+  sanearMonetarios(); // segunda passada: se o fallback também capturou valor truncado, descarta
 
   // ---- Dimensões: lista completa deduplicada (para exibir como seleção) ----
   const todasDimensoesRaw = [...texto.matchAll(/\b\d{2,4}\s{0,3}[x×X\*]\s{0,3}\d{2,4}\b/g)];
