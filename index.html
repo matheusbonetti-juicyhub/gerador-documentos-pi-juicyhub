@@ -34282,8 +34282,7 @@ const LABEL_MAP = {
   'volume contratado':'volume','impressoes contratadas':'volume','volume':'volume','quantidade de impressoes':'volume','impressoes planejadas':'volume',
   'valor bruto':'valorBruto','valor total':'valorBruto','investimento':'valorBruto',
   'valor liquido':'valorLiquido',
-  'cpm':'cpm','valor unitario':'cpm','valor de tabela':'cpm','custo por mil':'cpm',
-  'departamento':'departamento',
+  'cpm':'cpm','valor unitario':'cpm','valor de tabela':'cpm','custo por mil':'cpm','custo do cpm':'cpm',
   'impressoes entregues':'entregue','entregues':'entregue','entrega':'entregue','total entregue':'entregue',
 };
 
@@ -34317,6 +34316,7 @@ function extrairCamposDeTexto(texto){
           const campo = LABEL_MAP[key];
           let valor = m[2].trim().replace(/\s{2,}/g,' ');
           valor = valor.replace(/\s*CNPJ\s*[:\-]?\s*[\d.\/\-]{14,18}.*$/i, '').trim();
+          valor = valor.replace(/\s*\([^)]*\)\s*$/, '').trim(); // remove anotações tipo "(BRUTO TABELA)"
           if(!dict[campo] && valor) dict[campo] = valor;
           break;
         }
@@ -34327,6 +34327,18 @@ function extrairCamposDeTexto(texto){
   if(!dict.pi){
     const m = texto.match(/pedido de inser[çc][ãa]o\s*n?[ºo°]?\s*[:\-]?\s*(\d[\d.]{2,})/i) || texto.match(/\bPI\s*n?[ºo°]?\s*[:\-]?\s*(\d[\d.]{2,})/i);
     if(m) dict.pi = m[1];
+  }
+
+  // ---- Campanha: fallback para layouts em que o rótulo e o valor ficam em colunas
+  //      separadas (sem ":"), ex.: "Campanha   AVANCOS DO PROGRAMA POUPATEMPO   Tab. Preço:" ----
+  if(!dict.campanha){
+    const proximoRotulo = '(?:tab\\.?\\s*pre[çc]o|plano|tipo\\s*de\\s*pi|cnpj|id\\s*ve[íi]culo|per[íi]odo|pra[çc]a|ag[êe]ncia|formato|anunciante)';
+    const re = new RegExp('campanha\\s{1,3}([A-ZÀ-Ÿ0-9][^\\n]{2,80}?)(?=\\s{2,}|\\s+' + proximoRotulo + '\\b|$)', 'i');
+    const m = texto.match(re);
+    if(m){
+      let valor = m[1].trim();
+      if(valor && !/^[:：]/.test(valor)) dict.campanha = valor;
+    }
   }
 
   // ---- Período de veiculação: várias estratégias, da mais específica à mais genérica ----
@@ -34355,6 +34367,34 @@ function extrairCamposDeTexto(texto){
       dict.dataFimISO = dict.dataFimISO || dataBRParaISO(todas[1]);
     }
   }
+  if((!dict.dataInicioISO || !dict.dataFimISO)){
+    // busca direta por "Período de Veiculação" mesmo sem ":" (layout de tabela/coluna), com ano
+    const reComAno = new RegExp('per[íi]odo\\s*(?:de)?\\s*veicula[çc][ãa]o\\s*[:\\-]?\\s*' + DATA_RE + '[^\\d]{0,15}' + DATA_RE, 'i');
+    const m = texto.match(reComAno);
+    if(m){ dict.dataInicioISO = dataBRParaISO(m[1]); dict.dataFimISO = dataBRParaISO(m[2]); }
+  }
+  if((!dict.dataInicioISO || !dict.dataFimISO) && dict.periodo){
+    // período sem ano, ex.: "02/06 a 07/06" — usa um ano encontrado no documento, senão o ano atual
+    const DATA_SEM_ANO_RE = '(\\d{1,2})[\\/\\-\\.](\\d{1,2})';
+    const re = new RegExp(DATA_SEM_ANO_RE + '[^\\d]{1,15}' + DATA_SEM_ANO_RE);
+    const m = dict.periodo.match(re);
+    if(m){
+      const anoRef = (texto.match(/\b(20\d{2})\b/) || [null, String(new Date().getFullYear())])[1];
+      dict.dataInicioISO = `${anoRef}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+      dict.dataFimISO = `${anoRef}-${m[4].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+    }
+  }
+  if(!dict.dataInicioISO || !dict.dataFimISO){
+    // último recurso: "Período de Veiculação" sem ":" e sem ano nas datas (ex.: "02/06 a 07/06")
+    const DATA_SEM_ANO_RE = '(\\d{1,2})[\\/\\-\\.](\\d{1,2})';
+    const reSemAno = new RegExp('per[íi]odo\\s*(?:de)?\\s*veicula[çc][ãa]o\\s*[:\\-]?\\s*' + DATA_SEM_ANO_RE + '[^\\d]{1,15}' + DATA_SEM_ANO_RE, 'i');
+    const m = texto.match(reSemAno);
+    if(m){
+      const anoRef = (texto.match(/\b(20\d{2})\b/) || [null, String(new Date().getFullYear())])[1];
+      dict.dataInicioISO = `${anoRef}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+      dict.dataFimISO = `${anoRef}-${m[4].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+    }
+  }
 
   if(!dict.volume){
     const m = texto.match(/([\d.]{3,})\s*impress(?:ões|oes)(?!\s*entreg)/i);
@@ -34365,11 +34405,30 @@ function extrairCamposDeTexto(texto){
     if(m) dict.entregue = m[1];
   }
   if(!dict.cpm){
-    const m = texto.match(/R\$\s*([\d.,]+)\s*\/?\s*CPM/i) || texto.match(/CPM\s*(?:de|:)?\s*R\$\s*([\d.,]+)/i) || texto.match(/valor unit[aá]rio\s*(?:de)?\s*R\$\s*([\d.,]+)/i);
+    const m = texto.match(/CUSTO\s*(?:DO)?\s*CPM\s*[:\-]?\s*R\$\s*([\d.,]+)/i)
+      || texto.match(/R\$\s*([\d.,]+)\s*\(?BRUTO\s*TABELA\)?/i)
+      || texto.match(/R\$\s*([\d.,]+)\s*\/?\s*CPM/i)
+      || texto.match(/CPM\s*(?:de|:)?\s*R\$\s*([\d.,]+)/i)
+      || texto.match(/valor unit[aá]rio\s*(?:de)?\s*R\$\s*([\d.,]+)/i);
     if(m) dict.cpm = 'R$ ' + m[1];
   }
+  // Se a PI trouxer "CUSTO DO CPM/tabela" + "DESCONTO: X%" separadamente, calcula o CPM
+  // efetivamente aplicado (praticado) em vez de deixar o valor cheio de tabela
+  if(dict.cpm){
+    const mDesconto = texto.match(/desconto\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*%/i);
+    if(mDesconto){
+      const percentual = parseFloat(mDesconto[1].replace(',', '.'));
+      const valorTabelaPI = parseFloat(dict.cpm.replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',', '.'));
+      if(!isNaN(percentual) && !isNaN(valorTabelaPI) && valorTabelaPI > 0){
+        const valorAplicado = valorTabelaPI * (1 - percentual/100);
+        dict.cpm = 'R$ ' + valorAplicado.toFixed(2).replace('.', ',');
+      }
+    }
+  }
   if(!dict.valorBruto){
-    const m = texto.match(/valor\s*bruto\s*[:\-]?\s*R\$\s*([\d.,]+)/i);
+    const m = texto.match(/valor\s*bruto\s*[:\-]?\s*R\$\s*([\d.,]+)/i)
+      || texto.match(/=\s*R\$\s*([\d.,]+)\s*\(?BRUTO\s*NEGOCIADO\)?/i)
+      || texto.match(/R\$\s*([\d.,]+)\s*\(?BRUTO\s*NEGOCIADO\)?/i);
     if(m) dict.valorBruto = 'R$ ' + m[1];
   }
   if(!dict.valorLiquido){
@@ -34378,7 +34437,18 @@ function extrairCamposDeTexto(texto){
   }
 
   // ---- Dimensões: lista completa deduplicada (para exibir como seleção) ----
-  const todasDimensoes = texto.match(/\b\d{2,4}\s{0,3}[x×X\*]\s{0,3}\d{2,4}\b/g) || [];
+  const todasDimensoesRaw = [...texto.matchAll(/\b\d{2,4}\s{0,3}[x×X\*]\s{0,3}\d{2,4}\b/g)];
+  const todasDimensoes = todasDimensoesRaw
+    .filter(m=>{
+      const antes = texto.slice(Math.max(0, m.index-6), m.index);
+      const depois = texto.slice(m.index + m[0].length, m.index + m[0].length + 6);
+      // descarta se vier logo após uma vírgula decimal (ex.: "116,80 X 31.909") ou de "R$"
+      if(/,\s*$/.test(antes) || /R\$\s*$/i.test(antes)) return false;
+      // descarta se o número seguinte continuar com mais dígitos após ponto (ex.: "31.909" não é dimensão)
+      if(/^\.\d{3}\b/.test(depois)) return false;
+      return true;
+    })
+    .map(m=>m[0]);
   const dimensoesNormalizadas = todasDimensoes.map(d => d.replace(/\s+/g,'').toUpperCase().replace(/[×\*]/g,'X').replace('X','x'));
   dict.dimensoesArray = [...new Set(dimensoesNormalizadas)];
   if(!dict.dimensoes && dict.dimensoesArray.length){
@@ -34386,6 +34456,13 @@ function extrairCamposDeTexto(texto){
   }
 
   // ---- Razão Social do Anunciante via CNPJ (ignora o CNPJ do Juicyhub e da Agência) ----
+  function pareceNomeDeEmpresa(candidato){
+    if(!candidato || candidato.length < 3 || candidato.length > 100) return false;
+    // rejeita telefone/fax/endereço/anotações que não são nome de empresa
+    if(/\bfone\b|\bfax\b|\btel\b|\btelefone\b|\bcep\b|\brua\b|\bavenida\b|\bav\.\b|\bbloco\b|\bconj\.?\b|ie isenta|inscri[çc][ãa]o|\(\d{2}\)\s*\d/i.test(candidato)) return false;
+    if(!/[A-Za-zÀ-ÿ]{3,}/.test(candidato)) return false; // precisa ter ao menos uma palavra de letras
+    return true;
+  }
   if(!dict.anunciante){
     const contextoIgnorado = /agencia|agência|ve[íi]culo|juicy|juicyhub/i;
     // 1ª passada: exige que a própria linha (ou a anterior) mencione "Anunciante"/"Cliente"/"Razão Social" explicitamente
@@ -34399,15 +34476,18 @@ function extrairCamposDeTexto(texto){
       if(contextoIgnorado.test(linhaCnpj)) continue;
       if(!/anunciante|cliente|raz[aã]o social/i.test(linhaCnpj) && !/anunciante|cliente|raz[aã]o social/i.test(linhaAnterior)) continue;
       let candidato = linhaCnpj.replace(/CNPJ.*$/i,'').trim();
-      if(!candidato && i>0) candidato = linhaAnterior.trim();
       candidato = candidato.replace(/^(Anunciante|Cliente|Raz[aã]o Social(?:\s*do\s*Anunciante)?)\s*[:\-]?\s*/i,'').trim();
-      if(candidato && candidato.length > 2 && !/^CNPJ/i.test(candidato)){
+      if(!pareceNomeDeEmpresa(candidato) && i>0){
+        candidato = linhaAnterior.trim().replace(/^(Anunciante|Cliente|Raz[aã]o Social(?:\s*do\s*Anunciante)?)\s*[:\-]?\s*/i,'').trim();
+      }
+      if(pareceNomeDeEmpresa(candidato)){
         dict.anunciante = candidato;
         dict.anuncianteCnpj = m[1];
         break;
       }
     }
-    // 2ª passada (fallback): qualquer CNPJ que não seja do Juicyhub nem esteja perto de "Agência"/"Veículo"
+    // 2ª passada (fallback): qualquer CNPJ que não seja do Juicyhub nem esteja perto de "Agência"/"Veículo",
+    // desde que o texto candidato realmente pareça um nome de empresa (não telefone/fax/endereço)
     if(!dict.anunciante){
       for(let i=0; i<linhasBrutas.length; i++){
         const linhaCnpj = linhasBrutas[i];
@@ -34418,9 +34498,11 @@ function extrairCamposDeTexto(texto){
         if(cnpjNum.length !== 14 || cnpjNum === CNPJ_JUICYHUB_DIGITS) continue;
         if(contextoIgnorado.test(linhaCnpj)) continue;
         let candidato = linhaCnpj.replace(/CNPJ.*$/i,'').trim();
-        if(!candidato && i>0) candidato = linhaAnterior.trim();
         candidato = candidato.replace(/^(Anunciante|Cliente|Raz[aã]o Social(?:\s*do\s*Anunciante)?)\s*[:\-]?\s*/i,'').trim();
-        if(candidato && candidato.length > 2 && !/^CNPJ/i.test(candidato)){
+        if(!pareceNomeDeEmpresa(candidato) && i>0){
+          candidato = linhaAnterior.trim().replace(/^(Anunciante|Cliente|Raz[aã]o Social(?:\s*do\s*Anunciante)?)\s*[:\-]?\s*/i,'').trim();
+        }
+        if(pareceNomeDeEmpresa(candidato)){
           dict.anunciante = candidato;
           dict.anuncianteCnpj = m[1];
           break;
@@ -34443,17 +34525,17 @@ function extrairCamposDeTexto(texto){
 const FIELD_MAP = {
   acordo: {
     pi:'ac_pi', campanha:'ac_campanha', dataInicioISO:'ac_data_inicio', dataFimISO:'ac_data_fim',
-    agencia:'ac_agencia', departamento:'ac_departamento', formato:'ac_formato', dimensoes:'ac_dimensoes',
+    agencia:'ac_agencia', formato:'ac_formato', dimensoes:'ac_dimensoes',
     modeloCompra:'ac_modelo', volume:'ac_volume', valorBruto:'ac_valor_bruto', valorLiquido:'ac_valor_liquido', cpm:'ac_cpm_tabela'
   },
   declaracao: {
     pi:'de_pi', campanha:'de_campanha', dataInicioISO:'de_data_inicio', dataFimISO:'de_data_fim',
-    agencia:'de_agencia', departamento:'de_departamento', anunciante:'de_anunciante', praca:'de_praca',
+    agencia:'de_agencia', anunciante:'de_anunciante', praca:'de_praca',
     volume:'de_contratado', entregue:'de_entregue'
   },
   bonificacao: {
     pi:'bo_pi', campanha:'bo_campanha', dataInicioISO:'bo_data_inicio', dataFimISO:'bo_data_fim',
-    agencia:'bo_agencia', departamento:'bo_departamento', anunciante:'bo_anunciante',
+    agencia:'bo_agencia', anunciante:'bo_anunciante',
     volume:'bo_planejado', entregue:'bo_entregue'
   }
 };
