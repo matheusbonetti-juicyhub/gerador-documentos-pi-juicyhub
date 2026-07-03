@@ -306,7 +306,6 @@
       <div class="field"><label>Agência</label><input type="text" id="ac_agencia" placeholder="Baila Creative Co. Ltda."></div>
       <div class="field"><label>Departamento / A/C</label><input type="text" id="ac_departamento" value="Departamento de Mídia"></div>
 
-      <div class="field"><label>Formato</label><input type="text" id="ac_formato" value="Banner Display"></div>
       <div class="field">
         <label>Dimensões</label>
         <input type="text" id="ac_dimensoes" placeholder="300x250, 728x90 e 170x180">
@@ -33900,7 +33899,7 @@ function renderPreview(model){
 
 // ---------- Sugestão automática: Justificativa (Carta Acordo) ----------
 function sugerirJustificativaAcordo(){
-  const formato = document.getElementById('ac_formato').value || '[formato]';
+  const formato = document.getElementById('ac_dimensoes').value || '[formato]';
   const bruto = document.getElementById('ac_valor_bruto').value || '[valor bruto]';
   const selectDesconto = document.getElementById('ac_desconto');
   const campoCpm = document.getElementById('ac_cpm_tabela');
@@ -33942,7 +33941,7 @@ function sugerirJustificativaAcordo(){
   }
   document.getElementById('ac_justificativa').value = texto;
 }
-['ac_cpm_tabela','ac_formato','ac_valor_bruto','ac_desconto'].forEach(id=>{
+['ac_cpm_tabela','ac_dimensoes','ac_valor_bruto','ac_desconto'].forEach(id=>{
   document.getElementById(id).addEventListener('input', sugerirJustificativaAcordo);
   document.getElementById(id).addEventListener('change', sugerirJustificativaAcordo);
 });
@@ -34027,7 +34026,6 @@ function renderAcordo(){
     {type:'p', text: 'Prezados,'},
     {type:'p', text: `Em atendimento às exigências de comprovação comercial referentes ao Pedido de Inserção nº ${pi}, da campanha "${campanha}", veiculada no portal Juicy Santos entre ${di} e ${df}, formalizamos por meio desta as condições comerciais praticadas na negociação.`},
     {type:'ul', items: [
-      `Formato: ${document.getElementById('ac_formato').value}`,
       `Dimensões: ${document.getElementById('ac_dimensoes').value}`,
       `Modelo de Compra: ${document.getElementById('ac_modelo').value}`,
       `Volume Contratado: ${document.getElementById('ac_volume').value} impressões`,
@@ -34429,6 +34427,7 @@ function extrairCamposDeTexto(texto){
         const depois = janela.charAt(mN.index + mN[0].length);
         const antes = janela.charAt(mN.index - 1);
         if(depois === '/' || depois === '-' || antes === '/' || antes === '-') continue; // parte de data
+        if(/[A-Za-z0-9_]/.test(antes)) continue; // colado em código/palavra (ex.: SAC-MID_20260428)
         if(mN[0].replace(/\D/g,'').length === 14) continue; // CNPJ
         piEncontrado = mN[0];
         break;
@@ -34588,12 +34587,18 @@ function extrairCamposDeTexto(texto){
   }
   sanearMonetarios(); // segunda passada: se o fallback também capturou valor truncado, descarta
 
-  // ---- Dimensões: lista completa deduplicada (para exibir como seleção) ----
-  const todasDimensoesRaw = [...texto.matchAll(/\b\d{2,4}\s{0,3}[x×X\*]\s{0,3}\d{2,4}\b/g)];
+  // ---- Dimensões: prioriza a linha "FORMATOS ..." da PI (ex.: "FORMATOS Display: 728x90 / 320x50");
+  // se não existir, cai na varredura genérica do documento inteiro ----
+  let fonteDimensoes = texto;
+  {
+    const mFmt = texto.match(/formatos?[^\n]{0,80}/i);
+    if(mFmt && /\d{2,4}\s{0,3}[x×X\*]\s{0,3}\d{2,4}/.test(mFmt[0])) fonteDimensoes = mFmt[0];
+  }
+  const todasDimensoesRaw = [...fonteDimensoes.matchAll(/\b\d{2,4}\s{0,3}[x×X\*]\s{0,3}\d{2,4}\b/g)];
   const todasDimensoes = todasDimensoesRaw
     .filter(m=>{
-      const antes = texto.slice(Math.max(0, m.index-6), m.index);
-      const depois = texto.slice(m.index + m[0].length, m.index + m[0].length + 6);
+      const antes = fonteDimensoes.slice(Math.max(0, m.index-6), m.index);
+      const depois = fonteDimensoes.slice(m.index + m[0].length, m.index + m[0].length + 6);
       // descarta se vier logo após uma vírgula decimal (ex.: "116,80 X 31.909") ou de "R$"
       if(/,\s*$/.test(antes) || /R\$\s*$/i.test(antes)) return false;
       // descarta se o número seguinte continuar com mais dígitos após ponto (ex.: "31.909" não é dimensão)
@@ -34613,7 +34618,35 @@ function extrairCamposDeTexto(texto){
   if(dict.agencia && (PADRAO_GOV.test(dict.agencia) || PADRAO_VEICULO.test(dict.agencia))) delete dict.agencia;
   if(dict.anunciante && PADRAO_VEICULO.test(dict.anunciante)) delete dict.anunciante;
 
-  // ---- Blocos rotulados da PI (PRIORIDADE MÁXIMA): o layout traz seções "Anunciante"
+  // ---- Anunciante = campo "Cliente" da PI (PRIORIDADE MÁXIMA) ----
+  // No layout real (ex.: Propeg) o nome vem logo após o rótulo "Cliente", sem dois pontos,
+  // podendo continuar na(s) linha(s) seguinte(s) até o próximo rótulo (Endereço/Cidade/CNPJ...).
+  {
+    const PROX_ROTULO = /^(endere[cç]o|cidade|cep\b|cnpj|cpf|cnpj\/cpf|produto|i\.?e\.?|inscri[cç][aã]o|fone|tel|meio\b|pra[cç]a\b|per[i]?odo|campanha|valor|volume|impress|veicula|data\b|plano\b|tab\.?\b|pi\b)/i;
+    for(let i=0; i<linhasBrutas.length; i++){
+      const m = linhasBrutas[i].match(/^\s*cliente\b\s*[:\-]?\s*(.*)$/i);
+      if(!m) continue;
+      const partes = [];
+      if(m[1] && m[1].trim()) partes.push(m[1].trim());
+      for(let j=i+1; j<Math.min(i+4, linhasBrutas.length); j++){
+        const lnT = linhasBrutas[j].trim();
+        if(!lnT) break;
+        if(PROX_ROTULO.test(removerAcentos(lnT))) break;
+        partes.push(lnT);
+      }
+      let v = partes.join(' ').replace(/\s{2,}/g,' ').trim();
+      // corta lixo de outras colunas do PDF (Veículo/Razão Social/Juicy à direita)
+      v = v.split(/\b(?:ve[íi]culo|raz[aã]o\s*social|juicy)\b/i)[0].trim();
+      v = v.replace(/[,;\-]\s*$/,'').trim();
+      if(v && /[A-Za-zÀ-ÿ]{3,}/.test(v) && v.length >= 5 && !/juicy/i.test(v)){
+        dict.anunciante = v;
+        dict._anuncianteDeBloco = true;
+        break;
+      }
+    }
+  }
+
+  // ---- Blocos rotulados da PI: o layout traz seções "Anunciante"
   // e "Agência", cada uma com sua Razão Social. O que vier daqui sobrescreve palpites
   // anteriores. (O veículo é sempre Juicy Santos — fixo, nunca extraído.)
   {
@@ -34644,7 +34677,7 @@ function extrairCamposDeTexto(texto){
     const agBloco = acharRazaoDeBloco(/\bagencia\b/);
     const anBloco = acharRazaoDeBloco(/\banunciante\b/);
     if(agBloco && !PADRAO_VEICULO.test(agBloco) && !PADRAO_GOV.test(agBloco)) dict.agencia = agBloco;
-    if(anBloco && !PADRAO_VEICULO.test(anBloco)){
+    if(anBloco && !PADRAO_VEICULO.test(anBloco) && !dict._anuncianteDeBloco){
       const agNorm = dict.agencia ? removerAcentos(dict.agencia).toLowerCase() : '';
       if(!agNorm || removerAcentos(anBloco).toLowerCase() !== agNorm){ dict.anunciante = anBloco; dict._anuncianteDeBloco = true; }
     }
@@ -34759,7 +34792,7 @@ function extrairCamposDeTexto(texto){
 const FIELD_MAP = {
   acordo: {
     pi:'ac_pi', campanha:'ac_campanha', dataInicioISO:'ac_data_inicio', dataFimISO:'ac_data_fim',
-    agencia:'ac_agencia', formato:'ac_formato', dimensoes:'ac_dimensoes',
+    agencia:'ac_agencia', dimensoes:'ac_dimensoes',
     volume:'ac_volume', valorBruto:'ac_valor_bruto', valorLiquido:'ac_valor_liquido', cpm:'ac_cpm_tabela'
   },
   declaracao: {
@@ -34778,7 +34811,7 @@ const FIELD_MAP = {
   }
 };
 const CAMPOS_ESSENCIAIS = { // usados para calcular "faltando" de forma relevante por aba
-  acordo: ['pi','campanha','dataInicioISO','dataFimISO','agencia','formato','volume','valorBruto'],
+  acordo: ['pi','campanha','dataInicioISO','dataFimISO','agencia','volume','valorBruto'],
   declaracao: ['pi','campanha','dataInicioISO','dataFimISO','agencia','anunciante','volume'],
   bonificacao: ['pi','campanha','dataInicioISO','dataFimISO','agencia','volume'],
   bonifcarta: ['pi','campanha','dataInicioISO','dataFimISO','agencia','anunciante','entregue']
