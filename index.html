@@ -306,13 +306,12 @@
       <div class="field"><label>Departamento / A/C</label><input type="text" id="ac_departamento" value="Departamento de Mídia"></div>
 
       <div class="field"><label>Formato</label><input type="text" id="ac_formato" value="Banner Display"></div>
-      <div class="field"><label>Posição</label><input type="text" id="ac_posicao" placeholder="Home e ROS"></div>
       <div class="field">
         <label>Dimensões</label>
         <input type="text" id="ac_dimensoes" placeholder="300x250, 728x90 e 170x180">
         <div id="ac_dimensoes_opcoes" class="chip-options" style="display:none;"></div>
       </div>
-      <div class="field"><label>Modelo de compra</label><input type="text" id="ac_modelo" value="CPM"></div>
+      <div class="field"><label>Modelo de compra <span class="hint">(fixo)</span></label><input type="text" id="ac_modelo" value="CPM" readonly style="background:#f3f3f0; color:#666;"></div>
       <div class="row2">
         <div class="field"><label>Volume contratado (impressões)</label><input type="text" id="ac_volume" placeholder="27.085"></div>
         <div class="field"><label>Valor de tabela (CPM)</label><input type="text" id="ac_cpm_tabela" placeholder="R$ 110,00"></div>
@@ -33867,7 +33866,7 @@ function renderPreview(model){
 
 // ---------- Sugestão automática: Justificativa (Carta Acordo) ----------
 function sugerirJustificativaAcordo(){
-  const formato = document.getElementById('ac_posicao').value || document.getElementById('ac_formato').value || '[formato]';
+  const formato = document.getElementById('ac_formato').value || '[formato]';
   const bruto = document.getElementById('ac_valor_bruto').value || '[valor bruto]';
   const selectDesconto = document.getElementById('ac_desconto');
   const campoCpm = document.getElementById('ac_cpm_tabela');
@@ -33909,7 +33908,7 @@ function sugerirJustificativaAcordo(){
   }
   document.getElementById('ac_justificativa').value = texto;
 }
-['ac_cpm_tabela','ac_posicao','ac_formato','ac_valor_bruto','ac_desconto'].forEach(id=>{
+['ac_cpm_tabela','ac_formato','ac_valor_bruto','ac_desconto'].forEach(id=>{
   document.getElementById(id).addEventListener('input', sugerirJustificativaAcordo);
   document.getElementById(id).addEventListener('change', sugerirJustificativaAcordo);
 });
@@ -33995,7 +33994,6 @@ function renderAcordo(){
     {type:'p', text: `Em atendimento às exigências de comprovação comercial referentes ao Pedido de Inserção nº ${pi}, da campanha "${campanha}", veiculada no portal Juicy Santos entre ${di} e ${df}, formalizamos por meio desta as condições comerciais praticadas na negociação.`},
     {type:'ul', items: [
       `Formato: ${document.getElementById('ac_formato').value}`,
-      `Posição: ${document.getElementById('ac_posicao').value}`,
       `Dimensões: ${document.getElementById('ac_dimensoes').value}`,
       `Modelo de Compra: ${document.getElementById('ac_modelo').value}`,
       `Volume Contratado: ${document.getElementById('ac_volume').value} impressões`,
@@ -34349,8 +34347,28 @@ function extrairCamposDeTexto(texto){
     }
   });
 
+  // ---- Nº da PI: o documento SEMPRE contém a frase "Pedido de Inserção" e o número
+  // correto fica junto dela — esta busca tem prioridade sobre qualquer outro palpite.
+  {
+    const reFrase = /pedido\s*de\s*inser[çc][ãa]o/gi;
+    let mF, piEncontrado = null;
+    while(!piEncontrado && (mF = reFrase.exec(texto)) !== null){
+      const janela = texto.slice(mF.index + mF[0].length, mF.index + mF[0].length + 80);
+      const reNum = /(\d{1,3}(?:\.\d{3})+|\d{3,8})/g;
+      let mN;
+      while((mN = reNum.exec(janela)) !== null){
+        const depois = janela.charAt(mN.index + mN[0].length);
+        const antes = janela.charAt(mN.index - 1);
+        if(depois === '/' || depois === '-' || antes === '/' || antes === '-') continue; // parte de data
+        if(mN[0].replace(/\D/g,'').length === 14) continue; // CNPJ
+        piEncontrado = mN[0];
+        break;
+      }
+    }
+    if(piEncontrado) dict.pi = piEncontrado;
+  }
   if(!dict.pi){
-    const m = texto.match(/pedido de inser[çc][ãa]o\s*n?[ºo°]?\s*[:\-]?\s*(\d[\d.]{2,})/i) || texto.match(/\bPI\s*n?[ºo°]?\s*[:\-]?\s*(\d[\d.]{2,})/i);
+    const m = texto.match(/\bPI\s*n?[ºo°]?\s*[:\-]?\s*(\d[\d.]{2,})/i);
     if(m) dict.pi = m[1];
   }
 
@@ -34447,6 +34465,8 @@ function extrairCamposDeTexto(texto){
     const m = texto.match(/impress(?:ões|oes)\s*entregues?\s*[:\-]?\s*([\d.]{3,})/i) || texto.match(/entregues?\s*[:\-]?\s*([\d.]{3,})\s*impress/i);
     if(m) dict.entregue = m[1];
   }
+  // Sem relatório de entrega: assume entregue = volume contratado da PI
+  if(!dict.entregue && dict.volume) dict.entregue = dict.volume;
 
   // ---- Saneamento de valores monetários: normaliza para "R$ x.xxx,xx" e descarta
   // valores truncados/incompletos (ex.: "R$ 2." vindo de quebra de linha do PDF),
@@ -34524,6 +34544,43 @@ function extrairCamposDeTexto(texto){
   if(dict.agencia && (PADRAO_GOV.test(dict.agencia) || PADRAO_VEICULO.test(dict.agencia))) delete dict.agencia;
   if(dict.anunciante && PADRAO_VEICULO.test(dict.anunciante)) delete dict.anunciante;
 
+  // ---- Blocos rotulados da PI (PRIORIDADE MÁXIMA): o layout traz seções "Anunciante"
+  // e "Agência", cada uma com sua Razão Social. O que vier daqui sobrescreve palpites
+  // anteriores. (O veículo é sempre Juicy Santos — fixo, nunca extraído.)
+  {
+    const acharRazaoDeBloco = (padraoCabecalho)=>{
+      for(let i=0; i<linhasBrutas.length; i++){
+        const lnNorm = removerAcentos(linhasBrutas[i]).toLowerCase();
+        if(!padraoCabecalho.test(lnNorm)) continue;
+        // varre a própria linha e as seguintes procurando "Razão Social: ..."
+        for(let j=i; j<Math.min(i+8, linhasBrutas.length); j++){
+          const lnJNorm = removerAcentos(linhasBrutas[j]).toLowerCase();
+          // se antes de achar a razão social entrarmos em OUTRO bloco, aborta esta janela
+          if(j>i && /\b(anunciante|agencia|veiculo)\b/.test(lnJNorm) ) break;
+          const m = linhasBrutas[j].match(/raz[aã]o\s*social(?:\s*d[oa]\s*\w+)?\s*[:\-]?\s*(.{3,})/i);
+          if(m){
+            const v = m[1].replace(/\bCNPJ.*$/i,'').replace(/\s{2,}.*$/,'').trim();
+            if(v && /[A-Za-zÀ-ÿ]{3,}/.test(v)) return v;
+          }
+        }
+        // fallback: valor na própria linha do cabeçalho ("Agência: Nome Ltda")
+        const inline = linhasBrutas[i].match(new RegExp(padraoCabecalho.source + '\\s*[:\\-]\\s*(.{3,})','i'));
+        if(inline){
+          const v = inline[1].replace(/\bCNPJ.*$/i,'').replace(/\s{2,}.*$/,'').trim();
+          if(v && /[A-Za-zÀ-ÿ]{3,}/.test(v) && !/raz[aã]o/i.test(v)) return v;
+        }
+      }
+      return null;
+    };
+    const agBloco = acharRazaoDeBloco(/\bagencia\b/);
+    const anBloco = acharRazaoDeBloco(/\banunciante\b/);
+    if(agBloco && !PADRAO_VEICULO.test(agBloco) && !PADRAO_GOV.test(agBloco)) dict.agencia = agBloco;
+    if(anBloco && !PADRAO_VEICULO.test(anBloco)){
+      const agNorm = dict.agencia ? removerAcentos(dict.agencia).toLowerCase() : '';
+      if(!agNorm || removerAcentos(anBloco).toLowerCase() !== agNorm){ dict.anunciante = anBloco; dict._anuncianteDeBloco = true; }
+    }
+  }
+
   // ---- Agência: se o rótulo "Agência:" não resolveu, busca o nome no TOPO da PI (cabeçalho/timbre) ----
   if(!dict.agencia){
     const topo = linhas.slice(0, 15);
@@ -34540,7 +34597,7 @@ function extrairCamposDeTexto(texto){
   }
 
   // ---- Anunciante: prioridade máxima para Governo / SECOM / Secretaria de Comunicação ----
-  if(!dict.anunciante || !PADRAO_GOV.test(dict.anunciante)){
+  if(!dict._anuncianteDeBloco && (!dict.anunciante || !PADRAO_GOV.test(dict.anunciante))){
     const mGov = texto.match(/Governo[^\n,;]{0,60}?Secretaria\s+de\s+Comunica[çc][ãa]o[^\n,;]{0,40}/i)
       || texto.match(/Secretaria\s+de\s+Comunica[çc][ãa]o(?:\s+d[oea]s?\s+[A-ZÀ-ÿ][^\n,;]{0,50})?/i)
       || texto.match(/Governo\s+d[oe]\s+Estado[^\n,;]{0,50}/i)
@@ -34634,7 +34691,7 @@ const FIELD_MAP = {
   acordo: {
     pi:'ac_pi', campanha:'ac_campanha', dataInicioISO:'ac_data_inicio', dataFimISO:'ac_data_fim',
     agencia:'ac_agencia', formato:'ac_formato', dimensoes:'ac_dimensoes',
-    modeloCompra:'ac_modelo', volume:'ac_volume', valorBruto:'ac_valor_bruto', valorLiquido:'ac_valor_liquido', cpm:'ac_cpm_tabela'
+    volume:'ac_volume', valorBruto:'ac_valor_bruto', valorLiquido:'ac_valor_liquido', cpm:'ac_cpm_tabela'
   },
   declaracao: {
     pi:'de_pi', campanha:'de_campanha', dataInicioISO:'de_data_inicio', dataFimISO:'de_data_fim',
