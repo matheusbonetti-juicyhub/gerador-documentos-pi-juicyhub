@@ -253,7 +253,7 @@
 <div class="app-header">
   <div>
     <div style="font-size:18px; font-weight:700;">Gerador de Documentos Comerciais</div>
-    <div class="subtitle">Carta Acordo · Declaração Artigo 299 · Carta de Bonificação</div>
+    <div class="subtitle">Carta Acordo · Declaração Art. 299 · Carta de Negociação · Carta de Bonificação</div>
   </div>
   <img id="logoTopo" src="" alt="Juicy Santos">
 </div>
@@ -261,7 +261,8 @@
 <div class="tabs">
   <button class="tab-btn active" data-tab="acordo">Carta Acordo</button>
   <button class="tab-btn" data-tab="declaracao">Declaração Art. 299</button>
-  <button class="tab-btn" data-tab="bonificacao">Carta de Bonificação</button>
+  <button class="tab-btn" data-tab="bonificacao">Carta de Negociação</button>
+  <button class="tab-btn" data-tab="bonifcarta">Carta de Bonificação</button>
   <button class="tab-btn" data-tab="config">⚙ Dados fixos</button>
 </div>
 
@@ -270,7 +271,7 @@
   <!-- ============ PAINEL DE UPLOAD DE PDF ============ -->
   <div class="upload-panel">
     <h3>📎 Preencher automaticamente a partir de PDF</h3>
-    <div class="desc">Envie o PDF do Pedido de Inserção (PI) para preencher automaticamente os campos das <strong>3 abas</strong> (Carta Acordo, Declaração e Carta de Bonificação) de uma vez. Se tiver o Relatório de Entrega, envie também para preencher as "impressões entregues". A extração é automática e pode não pegar 100% dos campos — <strong>revise tudo antes de gerar</strong> os documentos. Nada é enviado para nenhum servidor; a leitura acontece no seu navegador.</div>
+    <div class="desc">Envie o PDF do Pedido de Inserção (PI) para preencher automaticamente os campos das <strong>4 abas</strong> (Carta Acordo, Declaração, Carta de Negociação e Carta de Bonificação) de uma vez. Se tiver o Relatório de Entrega, envie também para preencher as "impressões entregues". A extração é automática e pode não pegar 100% dos campos — <strong>revise tudo antes de gerar</strong> os documentos. Nada é enviado para nenhum servidor; a leitura acontece no seu navegador.</div>
     <div class="upload-row">
       <div class="upload-slot">
         <label>1. PDF do Pedido de Inserção (PI)</label>
@@ -377,7 +378,7 @@
 
     <!-- ---- CARTA DE BONIFICAÇÃO ---- -->
     <div class="form-section" id="form-bonificacao" style="display:none;">
-      <h3>Carta de Bonificação</h3>
+      <h3>Carta de Negociação</h3>
       <div class="legenda-campos">
         <span><span class="legenda-dot" style="background:#3fae5c;"></span>preenchido pelo PDF</span>
         <span><span class="legenda-dot" style="background:#e0a33b;"></span>não encontrado — revisar</span>
@@ -406,6 +407,34 @@
       <button class="btn btn-primary" onclick="renderBonificacao()">Atualizar visualização</button>
     </div>
 
+    <!-- ---- CARTA DE BONIFICAÇÃO (modelo veículos) ---- -->
+    <div class="form-section" id="form-bonifcarta" style="display:none;">
+      <h3>Carta de Bonificação</h3>
+      <div class="legenda-campos">
+        <span><span class="legenda-dot" style="background:#3fae5c;"></span>preenchido pelo PDF</span>
+        <span><span class="legenda-dot" style="background:#e0a33b;"></span>não encontrado — revisar</span>
+      </div>
+      <div class="field"><label>Nº do Pedido de Inserção (PI)</label><input type="text" id="cb_pi"></div>
+      <div class="field"><label>Anunciante / Cliente</label><input type="text" id="cb_anunciante"></div>
+      <div class="field"><label>Agência (A/C)</label><input type="text" id="cb_agencia"></div>
+      <div class="field"><label>Nome da campanha</label><input type="text" id="cb_campanha"></div>
+      <div class="row2">
+        <div class="field"><label>Início da veiculação</label><input type="date" id="cb_data_inicio"></div>
+        <div class="field"><label>Fim da veiculação</label><input type="date" id="cb_data_fim"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Impressões entregues</label><input type="text" id="cb_entregue" placeholder="27.085"></div>
+        <div class="field"><label>Praça</label><input type="text" id="cb_praca" value="Santos/SP"></div>
+      </div>
+      <div class="field"><label>Signatário <span class="hint">(dados fixos)</span></label><input type="text" id="cb_signatario"></div>
+      <div class="row2">
+        <div class="field"><label>RG</label><input type="text" id="cb_rg"></div>
+        <div class="field"><label>CPF</label><input type="text" id="cb_cpf"></div>
+      </div>
+      <div class="field"><label>Cargo</label><input type="text" id="cb_cargo"></div>
+      <button class="btn btn-primary" onclick="renderBonifCarta()">Atualizar visualização</button>
+    </div>
+
     <!-- ---- CONFIG / DADOS FIXOS ---- -->
     <div class="form-section" id="form-config" style="display:none;">
       <h3>Dados fixos do veículo</h3>
@@ -416,6 +445,7 @@
       <div class="field"><label>Signatário padrão</label><input type="text" id="cfg_signatario" value="Nathalia Williams Lopes"></div>
       <div class="field"><label>Cargo padrão</label><input type="text" id="cfg_cargo" value="CRO – Juicy Santos | Juicyhub"></div>
       <div class="field"><label>CPF padrão do signatário</label><input type="text" id="cfg_cpf" value="219.503.018-69"></div>
+      <div class="field"><label>RG padrão do signatário</label><input type="text" id="cfg_rg" value=""></div>
       <button class="btn btn-secondary" onclick="salvarConfig()">Salvar dados fixos</button>
       <div id="cfgStatus"></div>
 
@@ -33700,7 +33730,7 @@ const LOGO_BYTES = base64ToUint8Array(LOGO_B64);
 const LOGO_W = 150, LOGO_H = 33;
 
 // ---------- Config / localStorage ----------
-const CFG_KEYS = ['cfg_cidade','cfg_razao','cfg_cnpj','cfg_signatario','cfg_cargo','cfg_cpf'];
+const CFG_KEYS = ['cfg_cidade','cfg_razao','cfg_cnpj','cfg_signatario','cfg_cargo','cfg_cpf','cfg_rg'];
 function loadConfig(){
   CFG_KEYS.forEach(k=>{
     const saved = localStorage.getItem(k);
@@ -33711,6 +33741,10 @@ function loadConfig(){
   document.getElementById('ac_cpf').value = document.getElementById('cfg_cpf').value;
   document.getElementById('de_signatario').value = document.getElementById('cfg_signatario').value;
   document.getElementById('bo_signatario').value = document.getElementById('cfg_signatario').value;
+  document.getElementById('cb_signatario').value = document.getElementById('cfg_signatario').value;
+  document.getElementById('cb_rg').value = document.getElementById('cfg_rg').value;
+  document.getElementById('cb_cpf').value = document.getElementById('cfg_cpf').value;
+  document.getElementById('cb_cargo').value = document.getElementById('cfg_cargo').value;
 }
 function salvarConfig(){
   CFG_KEYS.forEach(k=> localStorage.setItem(k, document.getElementById(k).value));
@@ -34068,7 +34102,7 @@ function renderBonificacao(){
   const blocks = [
     {type:'p', text: `À ${agencia}`},
     {type:'p', text: `A/C: ${depto}`},
-    {type:'p', text: `Ref.: Carta de Bonificação – Campanha ${campanha} | PI nº ${pi}`},
+    {type:'p', text: `Ref.: Carta de Negociação – Campanha ${campanha} | PI nº ${pi}`},
     {type:'p', text: 'Prezados,'},
     {type:'p', text: `Em atenção ao Pedido de Inserção nº ${pi}, referente à campanha ${campanha}, veiculada em nossa rede entre ${di} e ${df}, apresentamos os resultados consolidados:`},
     {type:'ul', items: [
@@ -34079,7 +34113,7 @@ function renderBonificacao(){
   ];
 
   renderPreview({
-    titulo: `CARTA DE BONIFICAÇÃO PI ${pi}`,
+    titulo: `CARTA DE NEGOCIAÇÃO PI ${pi}`,
     subtitulo: null,
     dataLinha: `${cidade}, ${fmtDataExtenso()}`,
     blocks,
@@ -34088,14 +34122,49 @@ function renderBonificacao(){
   });
 }
 
+// ---------- Carta de Bonificação (modelo veículos) ----------
+function renderBonifCarta(){
+  const cidade = document.getElementById('cfg_cidade').value || 'Santos';
+  const pi = document.getElementById('cb_pi').value || '[PI]';
+  const anunciante = document.getElementById('cb_anunciante').value || '[anunciante]';
+  const agencia = document.getElementById('cb_agencia').value || '[agência]';
+  const campanha = document.getElementById('cb_campanha').value || '[campanha]';
+  const di = fmtDataCurta(document.getElementById('cb_data_inicio').value);
+  const df = fmtDataCurta(document.getElementById('cb_data_fim').value);
+  const entregue = document.getElementById('cb_entregue').value || '[impressões]';
+  const praca = document.getElementById('cb_praca').value || 'Santos/SP';
+
+  const blocks = [
+    {type:'p', text: 'A'},
+    {type:'p', text: anunciante},
+    {type:'p', text: `A/C ${agencia}`},
+    {type:'p', text: `Declaramos a ${anunciante}, que foram veiculadas no veículo Juicy Santos ${entregue} impressões referentes a campanha ${campanha} no período de ${di} a ${df} na praça de ${praca}.`},
+    {type:'p', text: 'Informamos que as impressões, que forem entregues excedendo ao autorizado não acarretarão em ônus ao Cliente, devendo as mesmas ser consideradas como bonificação.'},
+    {type:'p', text: 'Atenciosamente,'},
+  ];
+
+  renderPreview({
+    titulo: `Carta de Bonificação referente ao PI ${pi}`,
+    subtitulo: null,
+    dataLinha: `${cidade}, ${fmtDataExtenso()}`,
+    blocks,
+    assinaturaNome: document.getElementById('cb_signatario').value,
+    assinaturaLinhas: [
+      'RG: ' + document.getElementById('cb_rg').value,
+      'CPF: ' + document.getElementById('cb_cpf').value,
+      'Cargo: ' + document.getElementById('cb_cargo').value
+    ]
+  });
+}
+
 // ---------- Tabs ----------
-const TAB_RENDER = { acordo: renderAcordo, declaracao: renderDeclaracao, bonificacao: renderBonificacao, config: null };
+const TAB_RENDER = { acordo: renderAcordo, declaracao: renderDeclaracao, bonificacao: renderBonificacao, bonifcarta: renderBonifCarta, config: null };
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     abaAtiva = btn.dataset.tab;
-    ['acordo','declaracao','bonificacao','config'].forEach(t=>{
+    ['acordo','declaracao','bonificacao','bonifcarta','config'].forEach(t=>{
       document.getElementById('form-'+t).style.display = (t===btn.dataset.tab) ? 'block' : 'none';
     });
     const fn = TAB_RENDER[btn.dataset.tab];
@@ -34702,12 +34771,17 @@ const FIELD_MAP = {
     pi:'bo_pi', campanha:'bo_campanha', dataInicioISO:'bo_data_inicio', dataFimISO:'bo_data_fim',
     agencia:'bo_agencia', anunciante:'bo_anunciante',
     volume:'bo_planejado', entregue:'bo_entregue'
+  },
+  bonifcarta: {
+    pi:'cb_pi', campanha:'cb_campanha', dataInicioISO:'cb_data_inicio', dataFimISO:'cb_data_fim',
+    agencia:'cb_agencia', anunciante:'cb_anunciante', entregue:'cb_entregue'
   }
 };
 const CAMPOS_ESSENCIAIS = { // usados para calcular "faltando" de forma relevante por aba
   acordo: ['pi','campanha','dataInicioISO','dataFimISO','agencia','formato','volume','valorBruto'],
   declaracao: ['pi','campanha','dataInicioISO','dataFimISO','agencia','anunciante','volume'],
-  bonificacao: ['pi','campanha','dataInicioISO','dataFimISO','agencia','volume']
+  bonificacao: ['pi','campanha','dataInicioISO','dataFimISO','agencia','volume'],
+  bonifcarta: ['pi','campanha','dataInicioISO','dataFimISO','agencia','anunciante','entregue']
 };
 
 function popularOpcoesDimensoes(lista){
@@ -34845,17 +34919,18 @@ document.getElementById('upload_pi').addEventListener('change', async (e)=>{
     const rAcordo = aplicarDictNaAba('acordo', dict);
     const rDecl = aplicarDictNaAba('declaracao', dict);
     const rBoni = aplicarDictNaAba('bonificacao', dict);
+    const rCarta = aplicarDictNaAba('bonifcarta', dict);
 
     sugerirJustificativaAcordo();
     sugerirConfirmacaoDeclaracao();
     sugerirResultadoBonificacao();
     atualizarPreviewAbaAtiva();
 
-    const totalFaltando = rAcordo.faltando + rDecl.faltando + rBoni.faltando;
+    const totalFaltando = rAcordo.faltando + rDecl.faltando + rBoni.faltando + rCarta.faltando;
     status.className = totalFaltando > 0 ? 'status-msg status-warn' : 'status-msg status-ok';
     status.textContent = totalFaltando > 0
-      ? `Preenchi o que consegui identificar nas 3 abas. Alguns campos (em laranja) não foram encontrados — confira e complete manualmente antes de gerar.`
-      : `Campos preenchidos nas 3 abas a partir do PDF. Revise antes de gerar os documentos.`;
+      ? `Preenchi o que consegui identificar nas 4 abas. Alguns campos (em laranja) não foram encontrados — confira e complete manualmente antes de gerar.`
+      : `Campos preenchidos nas 4 abas a partir do PDF. Revise antes de gerar os documentos.`;
   }catch(err){
     status.className = 'status-msg status-err';
     status.textContent = 'Não consegui ler esse PDF automaticamente. Preencha os campos manualmente. (' + err.message + ')';
@@ -34878,12 +34953,14 @@ document.getElementById('upload_relatorio').addEventListener('change', async (e)
     if(resultado){
       const okDecl = aplicarSomenteEntregue('declaracao', resultado.valor);
       const okBoni = aplicarSomenteEntregue('bonificacao', resultado.valor);
+      aplicarSomenteEntregue('bonifcarta', resultado.valor);
+      entregueDoRelatorio = true;
       sugerirConfirmacaoDeclaracao();
       sugerirResultadoBonificacao();
       atualizarPreviewAbaAtiva();
 
       status.className = 'status-msg status-ok';
-      status.textContent = `Total de ${resultado.valor.toLocaleString('pt-BR')} impressões entregues identificado (${resultado.metodo}). Preenchido na Declaração e na Carta de Bonificação — confira antes de gerar.`;
+      status.textContent = `Total de ${resultado.valor.toLocaleString('pt-BR')} impressões entregues identificado (${resultado.metodo}). Preenchido na Declaração, na Carta de Negociação e na Carta de Bonificação — confira antes de gerar.`;
     } else {
       status.className = 'status-msg status-warn';
       status.textContent = 'Não consegui identificar o total de impressões entregues neste PDF. Preencha manualmente.';
@@ -34895,12 +34972,36 @@ document.getElementById('upload_relatorio').addEventListener('change', async (e)
   }
 });
 
+// ---------- Espelho: impressões entregues acompanham o volume contratado ----------
+// Regra: "entregues" fica sempre igual ao contratado da PI, continua editável, e só
+// diverge se (a) o usuário editar manualmente ou (b) um Relatório de Entrega for enviado.
+let entregueDoRelatorio = false;
+function ligarEspelhoEntregue(idVolume, idsEntregue){
+  const v = document.getElementById(idVolume);
+  if(!v) return;
+  idsEntregue.forEach(idE=>{
+    const e = document.getElementById(idE);
+    if(!e) return;
+    e.addEventListener('input', ()=>{ e.dataset.manual = '1'; });
+  });
+  v.addEventListener('input', ()=>{
+    if(entregueDoRelatorio) return;
+    idsEntregue.forEach(idE=>{
+      const e = document.getElementById(idE);
+      if(e && e.dataset.manual !== '1') e.value = v.value;
+    });
+  });
+}
+ligarEspelhoEntregue('de_contratado', ['de_entregue']);
+ligarEspelhoEntregue('bo_planejado', ['bo_entregue','cb_entregue']);
+
 // ---------- Inicialização ----------
 loadConfig();
 renderizarTabelaPrecos();
 sugerirJustificativaAcordo();
 sugerirConfirmacaoDeclaracao();
 sugerirResultadoBonificacao();
+renderBonifCarta();
 renderAcordo();
 </script>
 
