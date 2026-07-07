@@ -339,6 +339,11 @@
         <div class="field"><label>CPF</label><input type="text" id="ac_cpf"></div>
       </div>
 
+      <div class="field">
+        <label>Texto do documento <span class="hint">(editável — o documento final usa exatamente este texto; linhas com "- " viram lista, **trecho** vira negrito)</span></label>
+        <textarea id="ac_texto" rows="12" spellcheck="false"></textarea>
+        <button class="btn" type="button" style="margin-top:6px;" onclick="restaurarTextoPadrao('acordo')">↻ Restaurar texto automático</button>
+      </div>
       <button class="btn btn-primary" onclick="renderAcordo()">Atualizar visualização</button>
     </div>
 
@@ -358,7 +363,7 @@
       <div class="field"><label>Praça</label><input type="text" id="de_praca" value="Santos/SP"></div>
       <div class="field"><label>Agência</label><input type="text" id="de_agencia"></div>
       <div class="field"><label>Departamento / A/C</label><input type="text" id="de_departamento" value="Departamento de Mídia"></div>
-      <div class="field"><label>Razão Social do Anunciante</label><input type="text" id="de_anunciante"></div>
+      <div class="field"><label>Razão Social do Anunciante <span class="hint">(campo "Cliente" da PI)</span></label><input type="text" id="de_anunciante"></div>
 
       <div class="row2">
         <div class="field"><label>Impressões contratadas (PI)</label><input type="text" id="de_contratado" placeholder="27.085"></div>
@@ -372,6 +377,11 @@
       <div class="field"><label>Signatário</label><input type="text" id="de_signatario"></div>
       <div class="field"><label>Cargo (curto)</label><input type="text" id="de_cargo" value="CRO"></div>
 
+      <div class="field">
+        <label>Texto do documento <span class="hint">(editável — o documento final usa exatamente este texto; linhas com "- " viram lista, **trecho** vira negrito)</span></label>
+        <textarea id="de_texto" rows="12" spellcheck="false"></textarea>
+        <button class="btn" type="button" style="margin-top:6px;" onclick="restaurarTextoPadrao('declaracao')">↻ Restaurar texto automático</button>
+      </div>
       <button class="btn btn-primary" onclick="renderDeclaracao()">Atualizar visualização</button>
     </div>
 
@@ -390,7 +400,7 @@
       </div>
       <div class="field"><label>Agência</label><input type="text" id="bo_agencia"></div>
       <div class="field"><label>Departamento / A/C</label><input type="text" id="bo_departamento" value="Departamento de Mídia"></div>
-      <div class="field"><label>Anunciante (para o parágrafo final)</label><input type="text" id="bo_anunciante"></div>
+      <div class="field"><label>Razão Social do Anunciante <span class="hint">(campo "Cliente" da PI)</span></label><input type="text" id="bo_anunciante"></div>
 
       <div class="row2">
         <div class="field"><label>Impressões planejadas (PI)</label><input type="text" id="bo_planejado" placeholder="10.160"></div>
@@ -403,6 +413,11 @@
 
       <div class="field"><label>Signatário</label><input type="text" id="bo_signatario"></div>
 
+      <div class="field">
+        <label>Texto do documento <span class="hint">(editável — o documento final usa exatamente este texto; linhas com "- " viram lista, **trecho** vira negrito)</span></label>
+        <textarea id="bo_texto" rows="12" spellcheck="false"></textarea>
+        <button class="btn" type="button" style="margin-top:6px;" onclick="restaurarTextoPadrao('bonificacao')">↻ Restaurar texto automático</button>
+      </div>
       <button class="btn btn-primary" onclick="renderBonificacao()">Atualizar visualização</button>
     </div>
 
@@ -414,7 +429,7 @@
         <span><span class="legenda-dot" style="background:#e0a33b;"></span>não encontrado — revisar</span>
       </div>
       <div class="field"><label>Nº do Pedido de Inserção (PI)</label><input type="text" id="cb_pi"></div>
-      <div class="field"><label>Anunciante / Cliente</label><input type="text" id="cb_anunciante"></div>
+      <div class="field"><label>Razão Social do Anunciante <span class="hint">(campo "Cliente" da PI)</span></label><input type="text" id="cb_anunciante"></div>
       <div class="field"><label>Agência (A/C)</label><input type="text" id="cb_agencia"></div>
       <div class="field"><label>Nome da campanha</label><input type="text" id="cb_campanha"></div>
       <div class="row2">
@@ -431,6 +446,11 @@
         <div class="field"><label>CPF</label><input type="text" id="cb_cpf"></div>
       </div>
       <div class="field"><label>Cargo</label><input type="text" id="cb_cargo"></div>
+      <div class="field">
+        <label>Texto do documento <span class="hint">(editável — o documento final usa exatamente este texto; linhas com "- " viram lista, **trecho** vira negrito)</span></label>
+        <textarea id="cb_texto" rows="12" spellcheck="false"></textarea>
+        <button class="btn" type="button" style="margin-top:6px;" onclick="restaurarTextoPadrao('bonifcarta')">↻ Restaurar texto automático</button>
+      </div>
       <button class="btn btn-primary" onclick="renderBonifCarta()">Atualizar visualização</button>
     </div>
 
@@ -34040,7 +34060,7 @@ function renderAcordo(){
     titulo: `CARTA ACORDO PI ${pi}`,
     subtitulo: null,
     dataLinha: `${cidade}, ${fmtDataExtenso()}`,
-    blocks,
+    blocks: aplicarTextoEditavel('ac_texto', blocks),
     assinaturaNome: document.getElementById('ac_signatario').value,
     assinaturaLinhas: [document.getElementById('ac_cargo').value, 'CPF ' + document.getElementById('ac_cpf').value]
   });
@@ -34082,7 +34102,7 @@ function renderDeclaracao(){
     titulo: 'DECLARAÇÃO ARTIGO 299',
     subtitulo: '(Art. 11 do Decreto nº 57.690/66)',
     dataLinha: `${cidade}, ${fmtDataExtenso()}`,
-    blocks,
+    blocks: aplicarTextoEditavel('de_texto', blocks),
     assinaturaNome: document.getElementById('de_signatario').value,
     assinaturaLinhas: [document.getElementById('de_cargo').value, 'Juicy Santos | Juicyhub']
   });
@@ -34114,7 +34134,7 @@ function renderBonificacao(){
     titulo: `CARTA DE NEGOCIAÇÃO PI ${pi}`,
     subtitulo: null,
     dataLinha: `${cidade}, ${fmtDataExtenso()}`,
-    blocks,
+    blocks: aplicarTextoEditavel('bo_texto', blocks),
     assinaturaNome: document.getElementById('bo_signatario').value,
     assinaturaLinhas: ['Juicy Santos | Juicyhub']
   });
@@ -34145,7 +34165,7 @@ function renderBonifCarta(){
     titulo: `Carta de Bonificação referente ao PI ${pi}`,
     subtitulo: null,
     dataLinha: `${cidade}, ${fmtDataExtenso()}`,
-    blocks,
+    blocks: aplicarTextoEditavel('cb_texto', blocks),
     assinaturaNome: document.getElementById('cb_signatario').value,
     assinaturaLinhas: [
       'RG: ' + document.getElementById('cb_rg').value,
@@ -34153,6 +34173,61 @@ function renderBonifCarta(){
       'Cargo: ' + document.getElementById('cb_cargo').value
     ]
   });
+}
+
+// ---------- Texto do documento editável: serialização e parse ----------
+// serializeBlocks: transforma os blocos montados em texto plano editável
+// parseTextoLivre: reconstrói blocos a partir do texto editado ("- " = lista, **x** = negrito)
+function serializeBlocks(blocks){
+  return blocks.map(b=>{
+    if(b.type === 'p') return b.text;
+    if(b.type === 'p-bold') return '**' + b.text + '**';
+    if(b.type === 'p-runs') return b.runs.map(r=> r.bold ? '**' + r.text + '**' : r.text).join('');
+    if(b.type === 'ul') return b.items.map(i=> '- ' + i).join('\n');
+    return '';
+  }).filter(t=>t!=='').join('\n\n');
+}
+function parseTextoLivre(texto){
+  const blocks = [];
+  let ulAtual = null;
+  (texto||'').split('\n').forEach(lnRaw=>{
+    const t = lnRaw.trim();
+    if(t === ''){ ulAtual = null; return; }
+    if(/^[-•]\s+/.test(t)){
+      if(!ulAtual){ ulAtual = {type:'ul', items:[]}; blocks.push(ulAtual); }
+      ulAtual.items.push(t.replace(/^[-•]\s+/,''));
+      return;
+    }
+    ulAtual = null;
+    if(t.includes('**')){
+      const runs = [];
+      t.split(/(\*\*[^*]+\*\*)/).forEach(seg=>{
+        if(!seg) return;
+        const mB = seg.match(/^\*\*([^*]+)\*\*$/);
+        runs.push(mB ? {text:mB[1], bold:true} : {text:seg});
+      });
+      blocks.push({type:'p-runs', runs});
+    } else {
+      blocks.push({type:'p', text:t});
+    }
+  });
+  return blocks;
+}
+// aplica o texto editável: se o usuário editou, usa o texto dele; senão sincroniza a textarea
+function aplicarTextoEditavel(idTextarea, blocks){
+  const ta = document.getElementById(idTextarea);
+  if(!ta) return blocks;
+  if(ta.dataset.manual === '1' && ta.value.trim() !== ''){
+    return parseTextoLivre(ta.value);
+  }
+  ta.value = serializeBlocks(blocks);
+  return blocks;
+}
+const TEXTO_TABS = { acordo:'ac_texto', declaracao:'de_texto', bonificacao:'bo_texto', bonifcarta:'cb_texto' };
+function restaurarTextoPadrao(tab){
+  const ta = document.getElementById(TEXTO_TABS[tab]);
+  if(ta){ ta.dataset.manual = ''; ta.value = ''; }
+  if(TAB_RENDER[tab]) TAB_RENDER[tab]();
 }
 
 // ---------- Tabs ----------
@@ -34887,6 +34962,10 @@ function extrairTotalEntregue(texto){
   // ---- 1) Total explícito ----
   const padroesTotal = [
     /total\s*(?:de|geral)?\s*impress(?:ões|oes)\s*entregues?\s*[:\-]?\s*([\d.,]+)/i,
+    /total\s*entregue\s*de\s*impress(?:ões|oes)\s*[:\-]?\s*([\d.,]+)/i,
+    /impress(?:ões|oes)\s*entregues?\s*\(?total\)?\s*[:\-]?\s*([\d.,]+)/i,
+    /([\d.]{4,})\s*impress(?:ões|oes)\s*entregues/i,
+    /total\s*de\s*entregas?\s*[:\-]?\s*([\d.,]+)/i,
     /impress(?:ões|oes)\s*entregues?\s*[:\-]?\s*total\s*[:\-]?\s*([\d.,]+)/i,
     /total\s*entregue\s*[:\-]?\s*([\d.,]+)/i,
     /total\s*geral\s*[:\-]?\s*([\d.,]+)/i,
@@ -35026,6 +35105,14 @@ function ligarEspelhoEntregue(idVolume, idsEntregue){
   });
 }
 ligarEspelhoEntregue('de_contratado', ['de_entregue']);
+Object.entries(TEXTO_TABS).forEach(([tab, id])=>{
+  const ta = document.getElementById(id);
+  if(!ta) return;
+  ta.addEventListener('input', ()=>{
+    ta.dataset.manual = '1';
+    if(TAB_RENDER[tab]) TAB_RENDER[tab]();
+  });
+});
 ligarEspelhoEntregue('bo_planejado', ['bo_entregue','cb_entregue']);
 
 // ---------- Inicialização ----------
