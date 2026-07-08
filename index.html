@@ -241,7 +241,14 @@
     }
     body.modo-impressao #printArea #cartaPreview{
       box-shadow:none !important; margin:0 !important; width:100% !important; min-height:auto !important;
-      padding: 14mm 16mm !important; box-sizing: border-box !important;
+      padding: 14mm 16mm 32mm 16mm !important; box-sizing: border-box !important;
+    }
+    /* rodapé (razão social + CNPJ) fixado no pé da página impressa — aparece
+       bem no final de todos os documentos e se repete em cada página */
+    body.modo-impressao #printArea .carta-footer{
+      position: fixed !important;
+      bottom: 8mm !important; left: 16mm !important; right: 16mm !important;
+      margin: 0 !important;
     }
     /* margem 0 remove o cabeçalho/rodapé automático do navegador (data, título,
        URL e paginação são desenhados na área de margem); o respiro visual do
