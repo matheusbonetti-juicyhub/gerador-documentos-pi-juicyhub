@@ -241,8 +241,12 @@
     }
     body.modo-impressao #printArea #cartaPreview{
       box-shadow:none !important; margin:0 !important; width:100% !important; min-height:auto !important;
+      padding: 14mm 16mm !important; box-sizing: border-box !important;
     }
-    @page{ margin: 12mm; }
+    /* margem 0 remove o cabeçalho/rodapé automático do navegador (data, título,
+       URL e paginação são desenhados na área de margem); o respiro visual do
+       documento vem do padding do #cartaPreview acima */
+    @page{ margin: 0; }
   }
 </style>
 </head>
