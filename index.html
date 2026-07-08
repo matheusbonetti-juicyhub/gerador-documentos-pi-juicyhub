@@ -34526,16 +34526,33 @@ function extrairCamposDeTexto(texto){
     if(m) dict.pi = m[1];
   }
 
-  // ---- Campanha: fallback para layouts em que o rótulo e o valor ficam em colunas
-  //      separadas (sem ":"), ex.: "Campanha   AVANCOS DO PROGRAMA POUPATEMPO   Tab. Preço:" ----
-  if(!dict.campanha){
-    const proximoRotulo = '(?:tab\\.?\\s*pre[çc]o|plano|tipo\\s*de\\s*pi|cnpj|id\\s*ve[íi]culo|per[íi]odo|pra[çc]a|ag[êe]ncia|formato|anunciante)';
-    const re = new RegExp('campanha\\s{1,3}([A-ZÀ-Ÿ0-9][^\\n]{2,80}?)(?=\\s{2,}|\\s+' + proximoRotulo + '\\b|$)', 'i');
-    const m = texto.match(re);
-    if(m){
-      let valor = m[1].trim();
-      if(valor && !/^[:：]/.test(valor)) dict.campanha = valor;
+  // ---- Campanha (PRIORIDADE): o nome vem logo após o rótulo "Campanha" no topo da PI.
+  // Aceita mesma linha ou linha seguinte, limpa códigos internos (ex.: "SAC-MID_20260428")
+  // e o prefixo "Campanha" repetido, e corta rótulos de outras colunas que o PDF mesclar.
+  {
+    const CORTA_ROTULOS = /\s+(tab\.?\s*pre[çc]o|plano\b|tipo\s*de\s*pi|cnpj|respons[áa]vel|controle|id\s*ve[íi]culo|per[íi]odo).*$/i;
+    const LIMPA = (v)=>{
+      v = v.replace(CORTA_ROTULOS, '').trim();
+      v = v.replace(/^[:：\-]\s*/, '').trim();
+      v = v.replace(/^[A-Z]{2,}[-_][A-Za-z0-9_.-]*\d[A-Za-z0-9_.-]*\s+/, '').trim(); // código tipo SAC-MID_20260428
+      v = v.replace(/^campanha\s+/i, '').trim(); // "Campanha Balanco Habitacional" -> "Balanco Habitacional"
+      return v;
+    };
+    let achado = null;
+    for(let i=0; i<linhasBrutas.length && !achado; i++){
+      const m = linhasBrutas[i].match(/^\s*campanha\b\s*[:：\-]?\s*(.*)$/i);
+      if(!m) continue;
+      let v = LIMPA(m[1] || '');
+      if(!v || !/[A-Za-zÀ-ÿ]{3,}/.test(v)){
+        // valor na(s) linha(s) seguinte(s)
+        for(let j=i+1; j<Math.min(i+3, linhasBrutas.length); j++){
+          const cand = LIMPA(linhasBrutas[j].trim());
+          if(cand && /[A-Za-zÀ-ÿ]{3,}/.test(cand) && !/^(tab\.?|plano|tipo|cnpj)/i.test(cand)){ v = cand; break; }
+        }
+      }
+      if(v && /[A-Za-zÀ-ÿ]{3,}/.test(v) && v.length >= 4) achado = v;
     }
+    if(achado) dict.campanha = achado;
   }
 
   // ---- Período de veiculação: estratégias por PALAVRA-CHAVE primeiro (período/veiculação/
@@ -34714,10 +34731,14 @@ function extrairCamposDeTexto(texto){
       if(!m) continue;
       const partes = [];
       if(m[1] && m[1].trim()) partes.push(m[1].trim());
-      for(let j=i+1; j<Math.min(i+4, linhasBrutas.length); j++){
+      const LINHA_COLUNA_DIREITA = /^(ve[íi]culo\b|meio\b|pra[cç]a\b|raz[aã]o\s*social|juicy)/i;
+      for(let j=i+1; j<Math.min(i+6, linhasBrutas.length); j++){
         const lnT = linhasBrutas[j].trim();
         if(!lnT) break;
-        if(PROX_ROTULO.test(removerAcentos(lnT))) break;
+        const lnNorm = removerAcentos(lnT);
+        // linhas da coluna direita do PDF (Veículo/Meio/Praça/Razão Social) intercaladas: pula
+        if(LINHA_COLUNA_DIREITA.test(lnNorm)) continue;
+        if(PROX_ROTULO.test(lnNorm)) break;
         partes.push(lnT);
       }
       let v = partes.join(' ').replace(/\s{2,}/g,' ').trim();
