@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gerador de Documentos — Juicy Santos | Juicyhub</title>
+<title>Gerador de Documentos Comerciais - Mídia</title>
 <style>
   :root{
     --rosa: #d43b6e;
@@ -231,6 +231,11 @@
     margin: 0 64px;
   }
 
+  .colar-doc{ border:1px solid #e8e6e1; border-radius:8px; padding:12px; margin-bottom:12px; background:#fbfaf8; }
+  .fmt-bar{ display:flex; align-items:center; gap:6px; margin-top:8px; }
+  .btn-mini{ padding:4px 10px; font-size:12px; }
+  .fmt-hint{ font-size:11.5px; color:#999; margin-left:4px; }
+
   #printArea{ display:none; }
 
   @media print{
@@ -239,10 +244,17 @@
       display:block !important;
       position:static !important;
     }
+    /* html/body sem altura fixa e sem overflow: evita que o navegador crie uma
+       página adicional em branco no fim do PDF */
+    body.modo-impressao, body.modo-impressao html{ height:auto !important; overflow:visible !important; }
+    body.modo-impressao #printArea{ height:auto !important; }
     body.modo-impressao #printArea #cartaPreview{
-      box-shadow:none !important; margin:0 !important; width:100% !important; min-height:auto !important;
-      padding: 14mm 16mm 32mm 16mm !important; box-sizing: border-box !important;
+      box-shadow:none !important; margin:0 !important; width:100% !important;
+      min-height:0 !important; height:auto !important;
+      padding: 14mm 16mm 26mm 16mm !important; box-sizing: border-box !important;
+      page-break-after: avoid !important; break-after: avoid-page !important;
     }
+    body.modo-impressao #printArea #cartaPreview > *:last-child{ margin-bottom:0 !important; }
     /* rodapé (razão social + CNPJ) fixado no pé da página impressa — aparece
        bem no final de todos os documentos e se repete em cada página */
     body.modo-impressao #printArea .carta-footer{
@@ -263,24 +275,21 @@
 
 <div class="app-header">
   <div>
-    <div style="font-size:18px; font-weight:700;">Gerador de Documentos Comerciais</div>
-    <div class="subtitle">Carta Acordo · Declaração Art. 299 · Carta de Negociação · Carta de Bonificação</div>
+    <div style="font-size:18px; font-weight:700;">Gerador de Documentos Comerciais - Mídia</div>
+    <div class="subtitle">Cole o texto · Separe os documentos · Gere PDF e Word</div>
   </div>
   <img id="logoTopo" src="" alt="Juicy Santos">
 </div>
 
 <div class="tabs">
-  <button class="tab-btn active" data-tab="acordo">Carta Acordo</button>
-  <button class="tab-btn" data-tab="declaracao">Declaração Art. 299</button>
-  <button class="tab-btn" data-tab="bonificacao">Carta de Negociação</button>
-  <button class="tab-btn" data-tab="bonifcarta">Carta de Bonificação</button>
+  <button class="tab-btn active" data-tab="colar">📋 Colar &amp; Gerar</button>
   <button class="tab-btn" data-tab="config">⚙ Dados fixos</button>
 </div>
 
 <div class="layout">
 
   <!-- ============ PAINEL DE UPLOAD DE PDF ============ -->
-  <div class="upload-panel">
+  <div class="upload-panel" style="display:none;">
     <h3>📎 Preencher automaticamente a partir de PDF</h3>
     <div class="desc">Envie o PDF do Pedido de Inserção (PI) para preencher automaticamente os campos das <strong>4 abas</strong> (Carta Acordo, Declaração, Carta de Negociação e Carta de Bonificação) de uma vez. Se tiver o Relatório de Entrega, envie também para preencher as "impressões entregues". A extração é automática e pode não pegar 100% dos campos — <strong>revise tudo antes de gerar</strong> os documentos. Nada é enviado para nenhum servidor; a leitura acontece no seu navegador.</div>
     <div class="upload-row">
@@ -301,7 +310,7 @@
   <div class="panel">
 
     <!-- ---- CARTA ACORDO ---- -->
-    <div class="form-section" id="form-acordo">
+    <div class="form-section" id="form-acordo" style="display:none;">
       <h3>Carta Acordo</h3>
       <div class="legenda-campos">
         <span><span class="legenda-dot" style="background:#3fae5c;"></span>preenchido pelo PDF</span>
@@ -465,6 +474,67 @@
       <button class="btn btn-primary" onclick="renderBonifCarta()">Atualizar visualização</button>
     </div>
 
+    <!-- ---- COLAR & GERAR: separa 3 documentos colados e gera PDFs ---- -->
+    <div class="form-section" id="form-colar">
+      <h3>📋 Colar &amp; Gerar PDFs</h3>
+      <p style="font-size:13px; color:#666; margin-top:0;">Cole abaixo o texto completo com os 3 documentos (<strong>Carta Acordo</strong>, <strong>Declaração Art. 299</strong> e <strong>Carta de Bonificação</strong>). O sistema separa automaticamente, preenche a data de hoje nos espaços "____ de ____ de ano" e gera um PDF para cada documento com o logo do Juicyhub. Cada documento fica visualizável e editável antes de gerar.</p>
+      <div class="field">
+        <label>Texto completo (Ctrl+V)</label>
+        <textarea id="colar_texto" rows="12" spellcheck="false" placeholder="1. CARTA ACORDO&#10;CARTA ACORDO&#10;À&#10;PROPEG Comunicação S/A&#10;...&#10;2. DECLARAÇÃO – ARTIGO 299&#10;...&#10;3. CARTA DE BONIFICAÇÃO&#10;..."></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="separarDocumentosColados()">✂ Separar em 3 documentos</button>
+      <div id="colar_status" class="status-msg" style="display:none; margin-top:10px;"></div>
+      <div id="colar_resultado" style="display:none; margin-top:16px;">
+        <div class="colar-doc">
+          <label style="font-weight:700; display:block; margin-bottom:6px;">1 · Carta Acordo</label>
+          <textarea id="colar_doc_acordo" rows="10" spellcheck="false"></textarea>
+          <div class="fmt-bar">
+            <button class="btn btn-mini" type="button" title="Negrito no trecho selecionado" onclick="fmtNegrito('acordo')"><strong>B</strong></button>
+            <button class="btn btn-mini" type="button" title="Transformar linhas selecionadas em lista" onclick="fmtLista('acordo')">• Lista</button>
+            <button class="btn btn-mini" type="button" title="Remover formatação do trecho selecionado" onclick="fmtLimpar('acordo')">✕ Limpar</button>
+            <span class="fmt-hint">Rótulos "Campo:" já saem em negrito automaticamente</span>
+          </div>
+          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn" type="button" onclick="visualizarDocColado('acordo')">👁 Visualizar</button>
+            <button class="btn btn-primary" type="button" onclick="gerarPdfColado('acordo')">🖨 Imprimir / Salvar PDF</button>
+            <button class="btn btn-primary" type="button" onclick="gerarDocxColado('acordo')">⬇ Word (.docx)</button>
+          </div>
+        </div>
+        <div class="colar-doc">
+          <label style="font-weight:700; display:block; margin-bottom:6px;">2 · Declaração Art. 299</label>
+          <textarea id="colar_doc_decl" rows="10" spellcheck="false"></textarea>
+          <div class="fmt-bar">
+            <button class="btn btn-mini" type="button" title="Negrito no trecho selecionado" onclick="fmtNegrito('decl')"><strong>B</strong></button>
+            <button class="btn btn-mini" type="button" title="Transformar linhas selecionadas em lista" onclick="fmtLista('decl')">• Lista</button>
+            <button class="btn btn-mini" type="button" title="Remover formatação do trecho selecionado" onclick="fmtLimpar('decl')">✕ Limpar</button>
+            <span class="fmt-hint">Rótulos "Campo:" já saem em negrito automaticamente</span>
+          </div>
+          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn" type="button" onclick="visualizarDocColado('decl')">👁 Visualizar</button>
+            <button class="btn btn-primary" type="button" onclick="gerarPdfColado('decl')">🖨 Imprimir / Salvar PDF</button>
+            <button class="btn btn-primary" type="button" onclick="gerarDocxColado('decl')">⬇ Word (.docx)</button>
+          </div>
+        </div>
+        <div class="colar-doc">
+          <label style="font-weight:700; display:block; margin-bottom:6px;">3 · Carta de Bonificação</label>
+          <textarea id="colar_doc_bonif" rows="10" spellcheck="false"></textarea>
+          <div class="fmt-bar">
+            <button class="btn btn-mini" type="button" title="Negrito no trecho selecionado" onclick="fmtNegrito('bonif')"><strong>B</strong></button>
+            <button class="btn btn-mini" type="button" title="Transformar linhas selecionadas em lista" onclick="fmtLista('bonif')">• Lista</button>
+            <button class="btn btn-mini" type="button" title="Remover formatação do trecho selecionado" onclick="fmtLimpar('bonif')">✕ Limpar</button>
+            <span class="fmt-hint">Rótulos "Campo:" já saem em negrito automaticamente</span>
+          </div>
+          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn" type="button" onclick="visualizarDocColado('bonif')">👁 Visualizar</button>
+            <button class="btn btn-primary" type="button" onclick="gerarPdfColado('bonif')">🖨 Imprimir / Salvar PDF</button>
+            <button class="btn btn-primary" type="button" onclick="gerarDocxColado('bonif')">⬇ Word (.docx)</button>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;" type="button" onclick="gerarTodosPdfsColados()">⬇⬇ Gerar os 3 PDFs em sequência</button>
+        <p style="font-size:12px; color:#888; margin-top:6px;">Cada PDF abre a janela de impressão do navegador — escolha "Salvar como PDF" e confirme. O próximo abre em seguida.</p>
+      </div>
+    </div>
+
     <!-- ---- CONFIG / DADOS FIXOS ---- -->
     <div class="form-section" id="form-config" style="display:none;">
       <h3>Dados fixos do veículo</h3>
@@ -479,6 +549,7 @@
       <button class="btn btn-secondary" onclick="salvarConfig()">Salvar dados fixos</button>
       <div id="cfgStatus"></div>
 
+      <div style="display:none;"><!-- parte de mídia removida da interface -->
       <h3 style="margin-top:26px;">Tabela de preços (Mediakit)</h3>
       <p style="font-size:12.5px; color:#777;">
         Usada para sugerir automaticamente a "Justificativa do Valor Praticado" na Carta Acordo — o sistema compara o CPM da campanha com o valor de tabela da posição correspondente e já indica se houve ou não desconto. Ajuste aqui sempre que a tabela comercial do mediakit mudar.
@@ -497,6 +568,7 @@
       <button class="btn btn-ghost" type="button" onclick="adicionarLinhaTabelaPrecos()">+ Adicionar linha</button>
       <button class="btn btn-secondary" type="button" onclick="salvarTabelaPrecos()">Salvar tabela de preços</button>
       <div id="tabelaPrecosStatus"></div>
+      </div>
     </div>
 
   </div>
@@ -34241,14 +34313,196 @@ function restaurarTextoPadrao(tab){
   if(TAB_RENDER[tab]) TAB_RENDER[tab]();
 }
 
+// ---------- Colar & Gerar: separa 3 documentos colados e gera PDFs ----------
+const COLAR_DOCS = [
+  { chave:'acordo', nome:'Carta Acordo',         re:/^\s*(?:\d+\s*[.)\-–]\s*)?CARTA\s+ACORDO\b/i },
+  { chave:'decl',   nome:'Declaração Art. 299',  re:/^\s*(?:\d+\s*[.)\-–]\s*)?DECLARA[ÇC][ÃA]O\b/i },
+  { chave:'bonif',  nome:'Carta de Bonificação', re:/^\s*(?:\d+\s*[.)\-–]\s*)?CARTA\s+DE\s+BONIFICA[ÇC][ÃA]O\b/i },
+];
+const MESES_PT = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+function preencherDataHoje(texto){
+  const agora = new Date();
+  const dataStr = `${agora.getDate()} de ${MESES_PT[agora.getMonth()]} de ${agora.getFullYear()}`;
+  // "____ de __________ de 2026" (mantém a cidade que vier antes; ano colado é substituído pelo atual)
+  texto = texto.replace(/_{2,}\s*de\s*_{2,}\s*de\s*\d{2,4}/gi, dataStr);
+  // variação sem ano: "____ de ____ de ____"
+  texto = texto.replace(/_{2,}\s*de\s*_{2,}\s*de\s*_{2,}/gi, dataStr);
+  // variação "Santos, ______." (uma lacuna só)
+  texto = texto.replace(/(,\s*)_{3,}(\s*\.)/g, '$1' + dataStr + '$2');
+  return texto;
+}
+function separarDocumentosColados(){
+  const st = document.getElementById('colar_status');
+  const bruto = document.getElementById('colar_texto').value;
+  if(!bruto.trim()){
+    st.className = 'status-msg status-err'; st.style.display='block';
+    st.textContent = 'Cole o texto dos documentos no campo acima antes de separar.';
+    return;
+  }
+  const linhas = bruto.split('\n');
+  // marca a linha em que cada documento começa (ignora marcadores repetidos consecutivos do mesmo doc)
+  const marcas = [];
+  linhas.forEach((ln, idx)=>{
+    for(const d of COLAR_DOCS){
+      if(d.re.test(ln)){
+        if(!marcas.length || marcas[marcas.length-1].chave !== d.chave) marcas.push({idx, chave:d.chave});
+        break;
+      }
+    }
+  });
+  const encontrados = [...new Set(marcas.map(m=>m.chave))];
+  if(!encontrados.length){
+    st.className = 'status-msg status-err'; st.style.display='block';
+    st.textContent = 'Não encontrei os títulos "CARTA ACORDO", "DECLARAÇÃO" ou "CARTA DE BONIFICAÇÃO" no texto. Confira o conteúdo colado.';
+    return;
+  }
+  const secoes = {};
+  marcas.forEach((m, i)=>{
+    if(secoes[m.chave] !== undefined) return; // usa a primeira ocorrência de cada doc
+    const fim = (i+1 < marcas.length) ? marcas[i+1].idx : linhas.length;
+    let sec = linhas.slice(m.idx, fim);
+    // remove a linha-índice numerada ("1. CARTA ACORDO") quando o título limpo vem logo depois
+    if(sec.length >= 2 && /^\s*\d+\s*[.)\-–]/.test(sec[0])){
+      const d = COLAR_DOCS.find(x=>x.chave===m.chave);
+      if(d && d.re.test(sec[1])) sec = sec.slice(1);
+    }
+    // se o título restante ainda tiver numeração ("1. CARTA ACORDO"), remove só o número
+    if(sec.length) sec[0] = sec[0].replace(/^\s*\d+\s*[.)\-–]\s*/, '');
+    secoes[m.chave] = preencherDataHoje(sec.join('\n').trim());
+  });
+  COLAR_DOCS.forEach(d=>{
+    document.getElementById('colar_doc_'+d.chave).value = secoes[d.chave] || '';
+  });
+  document.getElementById('colar_resultado').style.display = 'block';
+  const nomes = COLAR_DOCS.filter(d=>secoes[d.chave]).map(d=>d.nome).join(', ');
+  const faltando = COLAR_DOCS.filter(d=>!secoes[d.chave]).map(d=>d.nome);
+  st.className = faltando.length ? 'status-msg status-warn' : 'status-msg status-ok';
+  st.style.display='block';
+  st.textContent = 'Documentos identificados: ' + nomes + '.' +
+    (faltando.length ? ' Não encontrei: ' + faltando.join(', ') + ' — você pode colar/editar manualmente no painel correspondente.' : ' Data de hoje preenchida. Revise e gere os PDFs.');
+}
+// Negrito automático em rótulos de campo: linhas "Cliente: valor", "Ref.: ...", etc.
+// Regra: até ~45 caracteres antes do ":" e sem terminar a linha no ":" de frase longa.
+const ROTULOS_NEGRITO = [
+  'dimensoes','modelo de compra','volume contratado','valor bruto','valor liquido',
+  'cliente','campanha','periodo','periodo de veiculacao','quantidade contratada',
+  'praca','formato','cpm negociado','cpm tabela','valor contratado','tipo de compra',
+  'desconto negociado','agencia','veiculo','produto','ref','ref.','pi','impressoes entregues','meio'
+];
+function aplicarNegritoRotulos(blocks){
+  return blocks.map(b=>{
+    if(b.type !== 'p') return b;
+    const m = b.text.match(/^([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9 .ºª()\/\-]{0,44}?):\s*(.*)$/);
+    if(!m) return b;
+    const rotulo = m[1].trim();
+    const rotuloNorm = removerAcentos(rotulo).toLowerCase().replace(/\.$/,'');
+    const conhecido = ROTULOS_NEGRITO.includes(rotuloNorm);
+    // rótulos conhecidos ficam em negrito mesmo sem valor após ":"; os demais precisam
+    // ter conteúdo (":" no fim de frase longa não é rótulo) e serem curtos
+    if(!conhecido){
+      if(!m[2].trim()) return b;
+      if(rotulo.split(/\s+/).length > 5) return b;
+    }
+    if(!m[2].trim()) return { type:'p-bold', text: rotulo + ':' };
+    return { type:'p-runs', runs: [ {text: rotulo + ': ', bold:true}, {text: m[2].trim()} ] };
+  });
+}
+function modeloDocColado(chave){
+  const texto = preencherDataHoje(document.getElementById('colar_doc_'+chave).value).trim();
+  const linhas = texto.split('\n');
+  let i = 0;
+  while(i < linhas.length && !linhas[i].trim()) i++;
+  const titulo = (linhas[i] || 'DOCUMENTO').trim().replace(/^\d+\s*[.)\-–]\s*/, ''); i++;
+  let subtitulo = null;
+  while(i < linhas.length && !linhas[i].trim()) i++;
+  if(i < linhas.length && /^\(.+\)$/.test(linhas[i].trim())){ subtitulo = linhas[i].trim(); i++; }
+  const blocks = aplicarNegritoRotulos(parseTextoLivre(linhas.slice(i).join('\n')));
+  return { titulo, subtitulo, dataLinha:'', blocks, assinaturaNome:'', assinaturaLinhas:[] };
+}
+function visualizarDocColado(chave){
+  const ta = document.getElementById('colar_doc_'+chave);
+  if(!ta.value.trim()) return;
+  ta.value = preencherDataHoje(ta.value);
+  renderPreview(modeloDocColado(chave));
+  const prev = document.getElementById('cartaPreview');
+  if(prev && prev.scrollIntoView) prev.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function gerarPdfColado(chave){
+  const ta = document.getElementById('colar_doc_'+chave);
+  if(!ta.value.trim()) return;
+  ta.value = preencherDataHoje(ta.value);
+  renderPreview(modeloDocColado(chave));
+  imprimirDocumento();
+}
+function _taColar(chave){ return document.getElementById('colar_doc_'+chave); }
+function fmtNegrito(chave){
+  const ta = _taColar(chave);
+  const a = ta.selectionStart, b = ta.selectionEnd, v = ta.value;
+  if(a === b) return;
+  ta.value = v.slice(0,a) + '**' + v.slice(a,b) + '**' + v.slice(b);
+  ta.focus(); ta.setSelectionRange(a, b + 4);
+}
+function fmtLista(chave){
+  const ta = _taColar(chave);
+  const a = ta.selectionStart, b = ta.selectionEnd, v = ta.value;
+  const ini = v.lastIndexOf('\n', a - 1) + 1;
+  const fimIdx = v.indexOf('\n', b);
+  const fim = fimIdx === -1 ? v.length : fimIdx;
+  const bloco = v.slice(ini, fim).split('\n')
+    .map(l => l.trim() ? (/^-\s/.test(l.trim()) ? l : '- ' + l.trim()) : l)
+    .join('\n');
+  ta.value = v.slice(0, ini) + bloco + v.slice(fim);
+  ta.focus();
+}
+function fmtLimpar(chave){
+  const ta = _taColar(chave);
+  let a = ta.selectionStart, b = ta.selectionEnd, v = ta.value;
+  if(a === b){ a = 0; b = v.length; } // sem seleção: limpa tudo
+  const trecho = v.slice(a, b).replace(/\*\*/g, '').replace(/^-\s+/gm, '');
+  ta.value = v.slice(0, a) + trecho + v.slice(b);
+  ta.focus();
+}
+async function gerarDocxColado(chave){
+  const ta = _taColar(chave);
+  if(!ta.value.trim()) return;
+  ta.value = preencherDataHoje(ta.value);
+  const model = modeloDocColado(chave);
+  try{
+    const blob = await buildDocxBlob(model);
+    const nomeArquivo = model.titulo.trim().replace(/\s+/g,'_').replace(/[^\w-]/g,'') + '.docx';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nomeArquivo;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }catch(e){
+    const st = document.getElementById('colar_status');
+    st.className = 'status-msg status-err'; st.style.display='block';
+    st.textContent = 'Erro ao gerar o Word: ' + e.message;
+  }
+}
+async function gerarTodosPdfsColados(){
+  for(const d of COLAR_DOCS){
+    const ta = document.getElementById('colar_doc_'+d.chave);
+    if(!ta || !ta.value.trim()) continue;
+    gerarPdfColado(d.chave);
+    await new Promise(res=>{
+      let feito = false;
+      const done = ()=>{ if(feito) return; feito = true; window.removeEventListener('afterprint', done); setTimeout(res, 600); };
+      window.addEventListener('afterprint', done);
+      setTimeout(done, 6000); // fallback para navegadores sem afterprint
+    });
+  }
+}
+
 // ---------- Tabs ----------
-const TAB_RENDER = { acordo: renderAcordo, declaracao: renderDeclaracao, bonificacao: renderBonificacao, bonifcarta: renderBonifCarta, config: null };
+const TAB_RENDER = { acordo: renderAcordo, declaracao: renderDeclaracao, bonificacao: renderBonificacao, bonifcarta: renderBonifCarta, colar: null, config: null };
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     abaAtiva = btn.dataset.tab;
-    ['acordo','declaracao','bonificacao','bonifcarta','config'].forEach(t=>{
+    ['acordo','declaracao','bonificacao','bonifcarta','colar','config'].forEach(t=>{
       document.getElementById('form-'+t).style.display = (t===btn.dataset.tab) ? 'block' : 'none';
     });
     const fn = TAB_RENDER[btn.dataset.tab];
@@ -34308,11 +34562,15 @@ async function buildDocxBlob(model){
 
   const corpoParas = blocksToDocxParagraphs(model.blocks);
 
-  const assinaturaParas = [
+  // assinatura só entra se existir (documentos colados trazem a assinatura no próprio corpo;
+  // parágrafos vazios aqui podiam empurrar o conteúdo para uma 2ª página em branco)
+  const temAssinatura = (model.assinaturaNome && model.assinaturaNome.trim()) ||
+                        (model.assinaturaLinhas && model.assinaturaLinhas.some(l=>l && l.trim() && !/^(RG|CPF|Cargo):\s*$/.test(l.trim())));
+  const assinaturaParas = temAssinatura ? [
     new Paragraph({ text:'', spacing:{before:500} }),
     new Paragraph({ children:[ new TextRun({text: model.assinaturaNome, bold:true, size:21}) ] }),
     ...model.assinaturaLinhas.map(l=> new Paragraph({ children:[ new TextRun({text:l, size:21}) ] }))
-  ];
+  ] : [];
 
   const razao = document.getElementById('cfg_razao').value;
   const cnpj = document.getElementById('cfg_cnpj').value;
@@ -34334,7 +34592,7 @@ async function buildDocxBlob(model){
     sections: [{
       properties:{ page:{ size:{ width:11906, height:16838 }, margin:{ top:1000, bottom:1200, left:1100, right:1100 } } },
       footers: { default: footer },
-      children: [ headerImg, ...tituloParas, dataPara, ...corpoParas, ...assinaturaParas ]
+      children: [ headerImg, ...tituloParas, ...((model.dataLinha && model.dataLinha.trim()) ? [dataPara] : []), ...corpoParas, ...assinaturaParas ]
     }]
   });
 
@@ -34403,7 +34661,7 @@ async function baixarDocx(){
 })();
 
 // Rastreia qual aba está visível, para saber qual preview atualizar após o upload
-let abaAtiva = 'acordo';
+let abaAtiva = 'colar';
 
 async function extrairTextoPDF(file){
   const arrayBuffer = await file.arrayBuffer();
