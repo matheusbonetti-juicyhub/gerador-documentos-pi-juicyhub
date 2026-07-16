@@ -217,6 +217,7 @@
   .carta-corpo p{ margin: 0 0 14px 0; white-space:pre-wrap; }
   .carta-corpo ul{ margin: 0 0 14px 0; padding-left:22px; }
   .carta-corpo li{ margin-bottom:4px; }
+  .carta-corpo p.sig-lines{ margin-top:30px; margin-bottom:0; line-height:1.4; }
   .carta-assinatura{ margin-top: 46px; }
   .carta-assinatura .nome{ font-weight:700; margin:0 0 2px 0; }
   .carta-assinatura p{ margin:0; }
@@ -232,6 +233,8 @@
   }
 
   .colar-doc{ border:1px solid #e8e6e1; border-radius:8px; padding:12px; margin-bottom:12px; background:#fbfaf8; }
+  /* usada só durante a medição pré-impressão para replicar o layout da página */
+  #cartaPreview.medindo{ padding:14mm 16mm 26mm 16mm !important; box-sizing:border-box !important; width:100% !important; min-height:0 !important; box-shadow:none !important; margin:0 !important; }
   .fmt-bar{ display:flex; align-items:center; gap:6px; margin-top:8px; }
   .btn-mini{ padding:4px 10px; font-size:12px; }
   .fmt-hint{ font-size:11.5px; color:#999; margin-left:4px; }
@@ -253,6 +256,7 @@
       min-height:0 !important; height:auto !important;
       padding: 14mm 16mm 26mm 16mm !important; box-sizing: border-box !important;
       page-break-after: avoid !important; break-after: avoid-page !important;
+      zoom: var(--fit-zoom, 1);
     }
     body.modo-impressao #printArea #cartaPreview > *:last-child{ margin-bottom:0 !important; }
     /* rodapé (razão social + CNPJ) fixado no pé da página impressa — aparece
@@ -33979,6 +33983,7 @@ function blocksToHtml(blocks){
     if(b.type === 'p-bold') return `<p style="font-weight:700; margin-bottom:6px;">${escapeHtml(b.text)}</p>`;
     if(b.type === 'p-runs') return `<p>${b.runs.map(r=> r.bold ? `<strong>${escapeHtml(r.text)}</strong>` : escapeHtml(r.text)).join('')}</p>`;
     if(b.type === 'ul') return `<ul>${b.items.map(i=>`<li>${escapeHtml(i)}</li>`).join('')}</ul>`;
+    if(b.type === 'p-lines') return `<p class="sig-lines">${b.linhas.map(runs=> runs.map(r=> r.bold ? `<strong>${escapeHtml(r.text)}</strong>` : escapeHtml(r.text)).join('')).join('<br>')}</p>`;
     return '';
   }).join('');
 }
@@ -34407,6 +34412,24 @@ function aplicarNegritoRotulos(blocks){
     return { type:'p-runs', runs: [ {text: rotulo + ': ', bold:true}, {text: m[2].trim()} ] };
   });
 }
+// Assinatura compacta: tudo que vem DEPOIS da linha de data ("Santos, 16 de julho de 2026.")
+// vira um único bloco com quebras de linha simples — sem espaçamento entre as linhas.
+function compactarAssinatura(blocks){
+  const textoDe = (b)=> b.type==='p' ? b.text : (b.type==='p-bold' ? b.text : (b.type==='p-runs' ? b.runs.map(r=>r.text).join('') : ''));
+  let idxData = -1;
+  blocks.forEach((b, i)=>{
+    if(/,\s*\d{1,2}\s+de\s+[a-zçã]+\s+de\s+\d{4}\s*\.?\s*$/i.test(textoDe(b).trim())) idxData = i;
+  });
+  if(idxData === -1 || idxData >= blocks.length - 1) return blocks;
+  const cauda = blocks.slice(idxData + 1).filter(b=> b.type !== 'ul');
+  if(!cauda.length) return blocks;
+  const linhas = cauda.map(b=>{
+    if(b.type === 'p') return [{text: b.text}];
+    if(b.type === 'p-bold') return [{text: b.text, bold:true}];
+    return b.runs;
+  });
+  return [ ...blocks.slice(0, idxData + 1), {type:'p-lines', linhas} ];
+}
 function modeloDocColado(chave){
   const texto = preencherDataHoje(document.getElementById('colar_doc_'+chave).value).trim();
   const linhas = texto.split('\n');
@@ -34416,7 +34439,8 @@ function modeloDocColado(chave){
   let subtitulo = null;
   while(i < linhas.length && !linhas[i].trim()) i++;
   if(i < linhas.length && /^\(.+\)$/.test(linhas[i].trim())){ subtitulo = linhas[i].trim(); i++; }
-  const blocks = aplicarNegritoRotulos(parseTextoLivre(linhas.slice(i).join('\n')));
+  let blocks = aplicarNegritoRotulos(parseTextoLivre(linhas.slice(i).join('\n')));
+  blocks = compactarAssinatura(blocks);
   return { titulo, subtitulo, dataLinha:'', blocks, assinaturaNome:'', assinaturaLinhas:[] };
 }
 function visualizarDocColado(chave){
@@ -34516,16 +34540,24 @@ function blocksToDocxParagraphs(blocks){
   const paras = [];
   blocks.forEach(b=>{
     if(b.type === 'p'){
-      paras.push(new Paragraph({ children:[new TextRun({text:b.text, size:21})], spacing:{after:200} }));
+      paras.push(new Paragraph({ children:[new TextRun({text:b.text, size:21})], spacing:{after:140} }));
     } else if(b.type === 'p-bold'){
       paras.push(new Paragraph({ children:[new TextRun({text:b.text, bold:true, size:21})], spacing:{before:120, after:120} }));
     } else if(b.type === 'p-runs'){
-      paras.push(new Paragraph({ children: b.runs.map(r=> new TextRun({text:r.text, bold:!!r.bold, size:21})), spacing:{after:80} }));
+      paras.push(new Paragraph({ children: b.runs.map(r=> new TextRun({text:r.text, bold:!!r.bold, size:21})), spacing:{after:60} }));
     } else if(b.type === 'ul'){
       b.items.forEach(item=>{
         paras.push(new Paragraph({ children:[new TextRun({text:item, size:21})], bullet:{level:0}, spacing:{after:60} }));
       });
       paras.push(new Paragraph({ text:'', spacing:{after:120} }));
+    } else if(b.type === 'p-lines'){
+      const runs = [];
+      b.linhas.forEach((linha, li)=>{
+        linha.forEach((r, ri)=>{
+          runs.push(new TextRun({ text: r.text, bold: !!r.bold, size:21, ...(li > 0 && ri === 0 ? {break:1} : {}) }));
+        });
+      });
+      paras.push(new Paragraph({ children: runs, spacing:{before:280, after:0, line:300} }));
     }
   });
   return paras;
@@ -34590,7 +34622,7 @@ async function buildDocxBlob(model){
 
   const doc = new Document({
     sections: [{
-      properties:{ page:{ size:{ width:11906, height:16838 }, margin:{ top:1000, bottom:1200, left:1100, right:1100 } } },
+      properties:{ page:{ size:{ width:11906, height:16838 }, margin:{ top:800, bottom:900, left:1100, right:1100 } } },
       footers: { default: footer },
       children: [ headerImg, ...tituloParas, ...((model.dataLinha && model.dataLinha.trim()) ? [dataPara] : []), ...corpoParas, ...assinaturaParas ]
     }]
@@ -34606,10 +34638,24 @@ function imprimirDocumento(){
   const originalNext = preview.nextSibling;
 
   printArea.appendChild(preview);
+
+  // ---- Garantia de página única: mede a altura na largura do papel (210mm) e,
+  // se o conteúdo passar de 1 página A4, reduz a escala para caber ----
+  printArea.style.cssText = 'display:block; position:absolute; left:-9999px; top:0; width:210mm;';
+  preview.classList.add('medindo');
+  const pxPorMm = preview.offsetWidth / 210;
+  const alturaLimite = Math.floor(pxPorMm * 295); // ~1 página A4, com folga
+  const alturaConteudo = preview.scrollHeight;
+  const fator = alturaConteudo > alturaLimite ? Math.max(0.6, alturaLimite / alturaConteudo) : 1;
+  document.documentElement.style.setProperty('--fit-zoom', fator.toFixed(4));
+  preview.classList.remove('medindo');
+  printArea.style.cssText = '';
+
   document.body.classList.add('modo-impressao');
 
   const restaurar = ()=>{
     document.body.classList.remove('modo-impressao');
+    document.documentElement.style.setProperty('--fit-zoom', '1');
     if(originalNext) originalParent.insertBefore(preview, originalNext);
     else originalParent.appendChild(preview);
     window.removeEventListener('afterprint', restaurar);
